@@ -1,0 +1,31 @@
+{
+  "name": "ontologizer-next",
+  "version": "1.0.0",
+  "description": "**Version: 1.8.0**",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@types/node": "^24.0.10",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "cheerio": "^1.1.0",
+    "lucide-react": "^0.525.0",
+    "next": "^15.3.5",
+    "openai": "^5.8.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "typescript": "^5.8.3",
+    "zod": "^3.25.75"
+  },
+  "devDependencies": {
+    "eslint": "^9.30.1",
+    "eslint-config-next": "^15.3.5",
+    "tailwindcss": "^4.1.11"
+  }
+}

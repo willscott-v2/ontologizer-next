@@ -1,0 +1,1174 @@
+/* Ontologizer Frontend Styles */
+.ontologizer-container {
+    max-width: 800px;
+    margin: 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.ontologizer-form {
+    background: #ffffff;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.ontologizer-form h3 {
+    margin: 0 0 1rem 0;
+    color: #1a1a1a;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.ontologizer-description {
+    color: #666;
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.ontologizer-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e1e5e9;
+    border-radius: 6px;
+    font-size: 16px;
+    transition: border-color 0.2s ease;
+    box-sizing: border-box;
+}
+
+.ontologizer-input:focus {
+    outline: none;
+    border-color: #007cba;
+    box-shadow: 0 0 0 3px rgba(0, 124, 186, 0.1);
+}
+
+.ontologizer-input.invalid-url {
+    border-color: #dc3545;
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.1);
+}
+
+.ontologizer-button {
+    background: #007cba;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ontologizer-button:hover:not(:disabled) {
+    background: #005a87;
+}
+
+.ontologizer-button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.loading-spinner {
+    display: inline-block;
+}
+
+.loading-spinner svg {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Version Number */
+.ontologizer-version {
+    text-align: center;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e1e5e9;
+}
+
+.ontologizer-version small {
+    color: #999;
+    font-size: 12px;
+    font-weight: 400;
+}
+
+/* Progress Indicator */
+.ontologizer-progress {
+    background: #ffffff;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    display: none;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #007cba, #005a87);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.progress-text {
+    text-align: center;
+    color: #666;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* Results Section */
+.ontologizer-results {
+    background: #ffffff;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.results-header {
+    background: #f8f9fa;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #e1e5e9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.results-header h4 {
+    margin: 0;
+    color: #1a1a1a;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.copy-button {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.copy-button:hover {
+    background: #218838;
+}
+
+.copy-button.copied {
+    background: #6c757d;
+}
+
+/* Processing Stats */
+.processing-stats {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 100px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #666;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-value {
+    font-size: 18px;
+    font-weight: 600;
+    color: #007cba;
+}
+
+/* Tabs */
+.results-tabs {
+    display: flex;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e1e5e9;
+}
+
+.tab-button {
+    background: none;
+    border: none;
+    padding: 12px 20px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: #666;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+    color: #007cba;
+    background: #e9ecef;
+}
+
+.tab-button.active {
+    color: #007cba;
+    border-bottom-color: #007cba;
+    background: white;
+}
+
+/* Tab Content */
+.tab-content {
+    padding: 1.5rem;
+}
+
+.tab-pane {
+    display: none;
+}
+
+.tab-pane.active {
+    display: block;
+}
+
+/* Entities List */
+.entity-item {
+    padding: 1rem;
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    background: #f8f9fa;
+    transition: all 0.2s ease;
+}
+
+.entity-item:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+.entity-item.high-confidence {
+    border-left: 4px solid #28a745;
+}
+
+.entity-item.medium-confidence {
+    border-left: 4px solid #ffc107;
+}
+
+.entity-item.low-confidence {
+    border-left: 4px solid #dc3545;
+}
+
+.entity-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.entity-name {
+    font-weight: 600;
+    color: #1a1a1a;
+    font-size: 16px;
+}
+
+.confidence-score {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.confidence-score.high-confidence {
+    background: #d4edda;
+    color: #155724;
+}
+
+.confidence-score.medium-confidence {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.confidence-score.low-confidence {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.entity-links {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.entity-link {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+    color: white;
+    transition: all 0.2s ease;
+}
+
+.entity-link:hover {
+    opacity: 0.8;
+    transform: translateY(-1px);
+}
+
+.entity-link.wikipedia {
+    background: #3366cc;
+}
+
+.entity-link.wikidata {
+    background: #cc0000;
+}
+
+.entity-link.google-kg {
+    background: #4285f4;
+}
+
+.entity-link.productontology {
+    background: #34a853;
+}
+
+/* JSON-LD Output */
+#json-ld-output {
+    background: #f8f9fa;
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    padding: 1rem;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    line-height: 1.4;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-height: 400px;
+    overflow-y: auto;
+    resize: vertical;
+    min-height: 200px;
+}
+
+/* Recommendations */
+.recommendation-item {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #e1e5e9;
+    color: #1a1a1a;
+    line-height: 1.5;
+    display: flex;
+    gap: 0.5rem;
+}
+
+.recommendation-item:last-child {
+    border-bottom: none;
+}
+
+.recommendation-number {
+    color: #007cba;
+    font-weight: 600;
+    min-width: 20px;
+}
+
+.recommendation-text {
+    flex: 1;
+    line-height: 1.6;
+}
+
+.rec-category {
+    color: #005a87;
+    font-weight: 600;
+}
+
+/* Error Messages */
+.ontologizer-error {
+    background: #fff0f0;
+    border: 1px solid #ffcccc;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    color: #721c24;
+}
+
+.ontologizer-error p {
+    margin: 0;
+}
+
+/* No Results Messages */
+.no-entities,
+.no-recommendations {
+    color: #666;
+    font-style: italic;
+    text-align: center;
+    padding: 2rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .ontologizer-container {
+        margin: 0 1rem;
+    }
+    
+    .ontologizer-form {
+        padding: 1.5rem;
+    }
+    
+    .results-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+    
+    .results-tabs {
+        flex-wrap: wrap;
+    }
+    
+    .tab-button {
+        flex: 1;
+        min-width: 0;
+        text-align: center;
+    }
+    
+    .entity-links {
+        justify-content: center;
+    }
+    
+    .entity-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .processing-stats {
+        justify-content: center;
+    }
+    
+    .stat-item {
+        min-width: 80px;
+    }
+}
+
+/* Admin Page Styles */
+.ontologizer-admin-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-top: 1rem;
+}
+
+.ontologizer-admin-footer {
+    text-align: center;
+    margin-top: 2rem;
+    color: #777;
+    font-size: 12px;
+}
+
+.ontologizer-admin-form {
+    background: #ffffff;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 2rem;
+}
+
+.ontologizer-admin-usage {
+    background: #f8f9fa;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 2rem;
+}
+
+.ontologizer-admin-usage h2 {
+    margin-top: 0;
+    color: #1a1a1a;
+}
+
+.ontologizer-admin-usage h3 {
+    color: #333;
+    margin-top: 1.5rem;
+}
+
+.ontologizer-admin-usage pre {
+    background: #ffffff;
+    border: 1px solid #e1e5e9;
+    border-radius: 4px;
+    padding: 1rem;
+    overflow-x: auto;
+}
+
+.ontologizer-admin-usage code {
+    background: #f1f3f4;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+@media (max-width: 1024px) {
+    .ontologizer-admin-container {
+        grid-template-columns: 1fr;
+    }
+}
+
+.ontologizer-admin-cache-management {
+    background: #ffffff;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 2rem;
+    margin-top: 2rem;
+    grid-column: 1 / -1; /* Span across both columns */
+}
+
+.ontologizer-admin-cache-management .button .dashicons {
+    line-height: 1.5;
+}
+
+.ontologizer-admin-cache-management .spinner {
+    vertical-align: middle;
+    margin-left: 8px;
+}
+
+.ontologizer-admin-cache-management #ontologizer-clear-cache.button.button-secondary {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px;
+}
+
+.ontologizer-cache-feedback {
+    margin-top: 1rem;
+    padding: 1rem;
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 10px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid;
+}
+
+.ontologizer-cache-feedback.notice-success {
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+    color: #155724;
+}
+
+.ontologizer-cache-feedback.notice-error {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+    color: #721c24;
+}
+
+/* Animation Classes */
+.fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.slide-down {
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Loading States */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #007cba;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Accessibility */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Focus States */
+.ontologizer-input:focus,
+.ontologizer-button:focus,
+.tab-button:focus,
+.copy-button:focus,
+.entity-link:focus {
+    outline: 2px solid #007cba;
+    outline-offset: 2px;
+}
+
+/* Print Styles */
+@media print {
+    .ontologizer-form,
+    .ontologizer-progress,
+    .results-header,
+    .results-tabs {
+        display: none !important;
+    }
+    
+    .ontologizer-results {
+        box-shadow: none;
+        border: 1px solid #000;
+    }
+    
+    .tab-content {
+        padding: 0;
+    }
+    
+    .tab-pane {
+        display: block !important;
+        page-break-inside: avoid;
+    }
+}
+
+/* Salience Score Gauge */
+.ontologizer-salience-score {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 1rem;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e1e5e9;
+}
+
+.salience-score-gauge {
+    position: relative;
+    width: 200px;
+    height: 100px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.gauge-background {
+    position: absolute;
+    width: 100%;
+    height: 200px;
+    border-radius: 100px 100px 0 0;
+    background: conic-gradient(from -90deg, #d9534f 0%, #f0ad4e 50%, #5cb85c 100%);
+}
+
+.gauge-mask {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    width: 160px;
+    height: 160px;
+    background: #f8f9fa;
+    border-radius: 50%;
+}
+
+.gauge-arc {
+    position: absolute;
+    top: 10px;
+    left: 99px;
+    width: 2px;
+    height: 90px;
+    background: #333;
+    transform-origin: bottom center;
+    transition: transform 0.5s ease-out;
+    z-index: 1;
+}
+
+.gauge-center-dot {
+    position: absolute;
+    top: 95px;
+    left: 95px;
+    width: 10px;
+    height: 10px;
+    background: #333;
+    border-radius: 50%;
+    z-index: 2;
+}
+
+.gauge-value {
+    position: absolute;
+    bottom: 5px;
+    width: 100%;
+    text-align: center;
+    font-size: 32px;
+    font-weight: 700;
+    color: #333;
+    z-index: 1;
+}
+
+.salience-primary-topic {
+    text-align: center;
+    padding: 0 1rem;
+    font-size: 14px;
+    color: #333;
+}
+
+.topic-label {
+    font-weight: 600;
+    color: #555;
+    margin-right: 0.5rem;
+}
+
+.topic-name {
+    font-style: italic;
+    color: #007cba;
+}
+
+.score-value {
+    font-size: 2em;
+    font-weight: 700;
+    color: #007cba;
+}
+
+.score-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ontologizer-cache-indicator {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.salience-score-number {
+    font-size: 3.5rem;
+    font-weight: 800;
+    color: #27ae60;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+}
+
+.salience-tips {
+    background: #f1f8e9;
+    border-left: 4px solid #8bc34a;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 6px;
+    color: #33691e;
+}
+
+.irrelevant-entities {
+    background: #fff3e0;
+    border-left: 4px solid #ff9800;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 6px;
+    color: #e65100;
+}
+
+/* Fan-out Analysis Styles */
+.fanout-analysis {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* Summary Card */
+.fanout-summary-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid #e1e5e9;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.summary-icon {
+    font-size: 2rem;
+    min-width: 3rem;
+    text-align: center;
+}
+
+.summary-content h4 {
+    margin: 0 0 0.5rem 0;
+    color: #1a1a1a;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.summary-content p {
+    margin: 0;
+    color: #666;
+    line-height: 1.5;
+}
+
+/* Structured Content */
+.fanout-structured-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+/* Section Headers */
+.fanout-section {
+    background: #ffffff;
+    border: 1px solid #e1e5e9;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.section-header {
+    background: linear-gradient(135deg, #007cba 0%, #005a87 100%);
+    color: white;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.section-icon {
+    font-size: 1.5rem;
+    min-width: 2rem;
+}
+
+.section-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    flex: 1;
+}
+
+.section-subtitle {
+    font-size: 0.875rem;
+    opacity: 0.9;
+    margin-top: 0.25rem;
+}
+
+/* Primary Entity */
+.primary-entity-card {
+    padding: 2rem;
+    text-align: center;
+}
+
+.entity-name-large {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #007cba;
+    background: linear-gradient(135deg, #007cba, #005a87);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Fan-out Queries Grid */
+.fanout-queries-grid {
+    padding: 1.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+}
+
+.fanout-query-card {
+    background: #f8f9fa;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    gap: 1rem;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.fanout-query-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.query-number {
+    background: #007cba;
+    color: white;
+    font-weight: 600;
+    font-size: 0.875rem;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.query-content {
+    flex: 1;
+}
+
+.query-text {
+    font-weight: 500;
+    color: #1a1a1a;
+    margin-bottom: 0.5rem;
+    line-height: 1.4;
+}
+
+.query-coverage {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.coverage-icon {
+    font-size: 1rem;
+}
+
+.coverage-yes { color: #28a745; }
+.coverage-partial { color: #ffc107; }
+.coverage-no { color: #dc3545; }
+.coverage-unknown { color: #6c757d; }
+
+/* Coverage Score */
+.coverage-score-card {
+    padding: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+}
+
+.coverage-score-visual {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.score-circle {
+    width: 100px;
+    height: 100px;
+    border: 6px solid;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.score-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.coverage-details {
+    flex: 1;
+}
+
+.coverage-text {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 0.5rem;
+}
+
+.coverage-description {
+    color: #666;
+    line-height: 1.5;
+    font-size: 0.95rem;
+}
+
+/* Follow-up Questions */
+.followup-questions-list {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.followup-question-item {
+    background: #f8f9fa;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    transition: all 0.2s ease;
+}
+
+.followup-question-item:hover {
+    background: #e9ecef;
+    transform: translateX(4px);
+}
+
+.question-icon {
+    font-size: 1.25rem;
+    color: #007cba;
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+}
+
+.question-text {
+    color: #1a1a1a;
+    line-height: 1.5;
+    font-weight: 500;
+}
+
+/* Recommendations */
+.fanout-recommendations-card {
+    padding: 2rem;
+}
+
+.recommendations-text {
+    color: #1a1a1a;
+    line-height: 1.6;
+    font-size: 1rem;
+    background: #f8f9fa;
+    border-left: 4px solid #007cba;
+    padding: 1.5rem;
+    border-radius: 0 8px 8px 0;
+    margin: 0;
+}
+
+/* Debug Section */
+.fanout-debug-section {
+    margin-top: 2rem;
+    border-top: 1px solid #e1e5e9;
+    padding-top: 1.5rem;
+}
+
+.fanout-debug-details {
+    background: #f8f9fa;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.fanout-debug-details summary {
+    cursor: pointer;
+    font-weight: 500;
+    color: #007cba;
+    padding: 1rem;
+    background: #ffffff;
+    border-bottom: 1px solid #e1e5e9;
+    transition: background-color 0.2s ease;
+}
+
+.fanout-debug-details summary:hover {
+    background: #f8f9fa;
+}
+
+.fanout-debug-content {
+    padding: 1rem;
+}
+
+.fanout-debug-json {
+    background: #ffffff;
+    border: 1px solid #e1e5e9;
+    border-radius: 4px;
+    padding: 1rem;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-height: 400px;
+    overflow-y: auto;
+    margin: 0;
+}
+
+/* Error and No Content States */
+.no-fanout,
+.fanout-error {
+    color: #666;
+    font-style: italic;
+    text-align: center;
+    padding: 3rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin: 1rem 0;
+}
+
+.fanout-error {
+    color: #721c24;
+    background: #fff0f0;
+    border: 1px solid #ffcccc;
+}
+
+/* Responsive Design for Fan-out */
+@media (max-width: 768px) {
+    .fanout-summary-card {
+        flex-direction: column;
+        text-align: center;
+        gap: 1rem;
+    }
+    
+    .section-header {
+        padding: 1rem;
+        flex-direction: column;
+        text-align: center;
+        gap: 0.5rem;
+    }
+    
+    .fanout-queries-grid {
+        grid-template-columns: 1fr;
+        padding: 1rem;
+    }
+    
+    .coverage-score-card {
+        flex-direction: column;
+        text-align: center;
+        gap: 1.5rem;
+    }
+    
+    .fanout-query-card {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .query-number {
+        align-self: flex-start;
+    }
+} 
