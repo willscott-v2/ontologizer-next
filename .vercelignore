@@ -1,0 +1,25 @@
+# Ignore node_modules (Vercel installs fresh)
+node_modules/
+
+# Ignore test files and configs
+*.test.*
+*.spec.*
+coverage/
+jest.config.js
+setupTests.ts
+
+# Ignore local environment files
+.env*
+!.env.example
+
+# Ignore editor and OS files
+.DS_Store
+*.swp
+
+# Ignore local scripts, backups, and logs
+*.log
+*.bak
+*.tmp
+
+# Ignore Vercel and deployment artifacts (if any)
+.vercel/ 

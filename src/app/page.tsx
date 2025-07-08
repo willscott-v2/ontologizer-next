@@ -27,7 +27,7 @@ export default function Home() {
         placeholder="Type here..."
       />
       {success && (
-        <div className="text-green-600 font-semibold">Success! You typed 'hello world'.</div>
+        <div className="text-green-600 font-semibold">Success! You typed &#39;hello world&#39;.</div>
       )}
     </main>
   );
