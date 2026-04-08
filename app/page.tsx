@@ -1,65 +1,84 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState } from 'react';
+import { AnalyzerForm, type AnalyzeParams } from '@/components/analyzer/AnalyzerForm';
+import { useApiKeys } from '@/hooks/useApiKeys';
+import { useAuth } from '@/hooks/useAuth';
+import type { AnalysisResult, AnalysisStep } from '@/lib/types/analysis';
+
+export default function HomePage() {
+  const { hasAnyKey, apiHeaders, loaded: keysLoaded } = useApiKeys();
+  const { user, loading: authLoading } = useAuth();
+  const [step, setStep] = useState<AnalysisStep>('idle');
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const isAnalyzing = step !== 'idle' && step !== 'complete' && step !== 'error';
+
+  async function handleAnalyze(params: AnalyzeParams) {
+    setStep('extracting');
+    setError(null);
+    setResult(null);
+
+    // TODO: Wire up the 4-step pipeline here
+    // Step 1: POST /api/analyze/extract
+    // Step 2: POST /api/analyze/enrich (batched)
+    // Step 3: POST /api/analyze/generate
+    // Step 4: POST /api/analyze/fanout (optional)
+
+    // For now, show a placeholder message
+    setTimeout(() => {
+      setStep('error');
+      setError('Pipeline not yet connected. The API routes are stubbed out -- build Phase 2 next.');
+    }, 1000);
+  }
+
+  if (!keysLoaded || authLoading) return null;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Ontologizer</h1>
+        <p className="text-gray-500">
+          Extract entities, generate JSON-LD structured data, and get SEO recommendations.
+        </p>
+      </div>
+
+      <AnalyzerForm
+        onSubmit={handleAnalyze}
+        isAnalyzing={isAnalyzing}
+        hasApiKeys={!!hasAnyKey}
+        isSignedIn={!!user}
+      />
+
+      {/* Progress indicator */}
+      {isAnalyzing && (
+        <div className="rounded-lg border bg-white p-4">
+          <div className="flex items-center gap-3">
+            <div className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+            <span className="text-sm text-gray-600">
+              {step === 'extracting' && 'Fetching and extracting entities...'}
+              {step === 'enriching' && 'Enriching entities with external sources...'}
+              {step === 'generating' && 'Generating schema and recommendations...'}
+              {step === 'fanout' && 'Running fan-out analysis...'}
+            </span>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {error}
         </div>
-      </main>
+      )}
+
+      {/* Results placeholder */}
+      {result && (
+        <div className="rounded-lg border bg-white p-4">
+          <p className="text-sm text-gray-500">Results will render here (Phase 4).</p>
+        </div>
+      )}
     </div>
   );
 }
