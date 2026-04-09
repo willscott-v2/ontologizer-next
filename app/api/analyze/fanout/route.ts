@@ -1,28 +1,55 @@
+/**
+ * POST /api/analyze/fanout
+ *
+ * Accepts HTML content and optional URL, runs Gemini-powered fan-out
+ * analysis to predict how Google's AI Mode might decompose queries.
+ *
+ * Headers:
+ *   X-Gemini-Key (optional) - BYOK Gemini API key
+ *
+ * Body:
+ *   { htmlContent, url? }
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
+import type { FanoutResult } from '../../../../lib/types/analysis';
+import { analyzeFanout } from '../../../../lib/pipeline/fanout-analyzer';
 
-export const dynamic = 'force-dynamic';
+interface FanoutRequestBody {
+  htmlContent: string;
+  url?: string;
+}
 
-// Step 4: Run Gemini fan-out query analysis (optional)
-// Expected request body: { htmlContent: string, url?: string }
-// BYOK keys in headers: X-Gemini-Key
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as FanoutRequestBody;
     const { htmlContent, url } = body;
 
-    // TODO: Extract semantic chunks from HTML
-    // TODO: Build fan-out prompt
-    // TODO: Call Gemini API (gemini-2.0-flash-exp with fallback)
-    // TODO: Return FanoutResult
+    if (!htmlContent) {
+      return NextResponse.json(
+        { error: 'Missing required field: htmlContent' },
+        { status: 400 },
+      );
+    }
 
-    return NextResponse.json(
-      { error: 'Not implemented yet. Port fan-out analyzer in Phase 3.' },
-      { status: 501 }
-    );
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    const geminiKey = request.headers.get('X-Gemini-Key') || undefined;
+
+    if (!geminiKey) {
+      const result: FanoutResult = {
+        analysis: null,
+        chunksExtracted: 0,
+        chunks: [],
+        error: 'Gemini API key required. Pass it via X-Gemini-Key header.',
+      };
+      return NextResponse.json(result, { status: 400 });
+    }
+
+    const result = await analyzeFanout(htmlContent, url, geminiKey);
+
+    // Return 200 even if analysis has an error (the error field conveys it)
+    return NextResponse.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1,28 +1,65 @@
+/**
+ * POST /api/analyze/generate
+ *
+ * Accepts enriched entities, text parts, main topic, and URL.
+ * Returns generated JSON-LD schema, SEO recommendations, salience score,
+ * improvement tips, and irrelevant entities.
+ *
+ * Headers:
+ *   X-OpenAI-Key (optional) - BYOK OpenAI key for enhanced recommendations
+ *
+ * Body:
+ *   { enrichedEntities, textParts, mainTopic, url }
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
+import type { EnrichedEntity } from '../../../../lib/types/entities';
+import type { TextParts, GenerateResult } from '../../../../lib/types/analysis';
+import { generateJsonLd } from '../../../../lib/pipeline/schema-generator';
+import { analyzeContent } from '../../../../lib/pipeline/seo-analyzer';
+import { calculateSalience } from '../../../../lib/pipeline/salience-scorer';
 
-export const dynamic = 'force-dynamic';
+interface GenerateRequestBody {
+  enrichedEntities: EnrichedEntity[];
+  textParts: TextParts;
+  mainTopic: string;
+  url: string;
+}
 
-// Step 3: Generate JSON-LD schema, SEO recommendations, and salience score
-// Expected request body: { enrichedEntities: EnrichedEntity[], textParts: TextParts, mainTopic: string, url: string }
-// BYOK keys in headers: X-OpenAI-Key
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as GenerateRequestBody;
+    const { enrichedEntities, textParts, mainTopic, url } = body;
 
-    // TODO: Generate JSON-LD schema (detect type, build schema)
-    // TODO: Generate SEO recommendations via OpenAI
-    // TODO: Calculate topical salience score
-    // TODO: Write to analysis_cache
-    // TODO: Return GenerateResult
+    if (!enrichedEntities || !textParts || !mainTopic) {
+      return NextResponse.json(
+        { error: 'Missing required fields: enrichedEntities, textParts, mainTopic' },
+        { status: 400 },
+      );
+    }
 
-    return NextResponse.json(
-      { error: 'Not implemented yet. Port schema generator and analyzer in Phase 3.' },
-      { status: 501 }
-    );
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    const openaiKey = request.headers.get('X-OpenAI-Key') || undefined;
+
+    // Generate JSON-LD schema
+    const jsonLd = generateJsonLd(enrichedEntities, textParts, mainTopic, url || '');
+
+    // Run SEO analysis and salience scoring in parallel
+    const [recommendations, salience] = await Promise.all([
+      analyzeContent(enrichedEntities, textParts, mainTopic, jsonLd, openaiKey),
+      Promise.resolve(calculateSalience(enrichedEntities, textParts, mainTopic)),
+    ]);
+
+    const result: GenerateResult = {
+      jsonLd,
+      recommendations,
+      topicalSalience: salience.score,
+      salienceTips: salience.tips,
+      irrelevantEntities: salience.irrelevantEntities,
+    };
+
+    return NextResponse.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

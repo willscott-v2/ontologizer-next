@@ -1,25 +1,41 @@
 import type { EnrichedEntity, RawEntity } from './entities';
 
+// Shared text structure returned by parser
+export interface Heading {
+  level: number;
+  text: string;
+}
+
+export interface TextParts {
+  title: string;
+  description: string;
+  headings: Heading[];
+  body: string;
+  htmlContent: string;
+}
+
+// Semantic chunk for fan-out analysis
+export interface SemanticChunk {
+  type: 'primary_topic' | 'section' | 'list' | 'structured_data';
+  heading?: string;
+  content: string;
+}
+
 // Step 1: Extract response
 export interface ExtractResult {
-  url: string;
-  pageTitle: string;
+  textParts: TextParts;
   mainTopic: string;
   mainTopicConfidence: number;
   entities: RawEntity[];
-  textParts: {
-    title: string;
-    description: string;
-    headings: { level: number; text: string }[];
-    bodyText: string;
-    htmlContent: string;
-  };
+  tokenUsage?: number;
+  costUsd?: number;
   cached?: boolean;
 }
 
 // Step 2: Enrich response (per batch)
 export interface EnrichResult {
   enrichedEntities: EnrichedEntity[];
+  processingTimeMs?: number;
 }
 
 // Step 3: Generate response
@@ -38,26 +54,39 @@ export interface Recommendation {
 
 // Step 4: Fan-out response
 export interface FanoutResult {
-  analysis: string;
+  analysis: string | null;
   chunksExtracted: number;
-  chunks?: string[];
+  chunks?: SemanticChunk[] | string[];
+  error?: string;
 }
 
 // Combined full analysis
-export interface AnalysisResult {
-  url: string;
-  pageTitle: string;
+export interface SalienceInfo {
+  score: number;
   mainTopic: string;
-  mainTopicConfidence: number;
+}
+
+export interface AnalysisResult {
   entities: EnrichedEntity[];
   jsonLd: Record<string, unknown>;
   recommendations: Recommendation[];
-  topicalSalience: number;
+  topicalSalience: SalienceInfo;
   salienceTips: string[];
   irrelevantEntities: string[];
   fanoutAnalysis?: FanoutResult;
   processingTimeMs: number;
   cached: boolean;
+}
+
+// Form params
+export interface AnalyzeParams {
+  mode: 'url' | 'paste';
+  url: string;
+  pasteContent: string;
+  mainTopicStrategy: MainTopicStrategy;
+  clearCache: boolean;
+  runFanout: boolean;
+  fanoutOnly: boolean;
 }
 
 export type MainTopicStrategy = 'strict' | 'title' | 'frequent' | 'pattern';

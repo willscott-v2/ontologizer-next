@@ -81,7 +81,17 @@ alter table public.analysis_log enable row level security;
 create policy "Users see own logs" on public.analysis_log for select using (auth.uid() = user_id);
 create policy "System can insert logs" on public.analysis_log for insert with check (true);
 
--- Cleanup expired cache entries (run via pg_cron or scheduled function)
+-- Atomic increment for free usage counter
+create or replace function public.increment_free_analyses(user_id uuid)
+returns void as $$
+begin
+  update public.profiles
+  set free_analyses_used = free_analyses_used + 1
+  where id = user_id;
+end;
+$$ language plpgsql security definer;
+
+-- Cleanup expired cache entries (run via pg_cron)
 -- select cron.schedule('cleanup-expired-cache', '0 3 * * *', $$
 --   delete from public.analysis_cache where expires_at < now();
 --   delete from public.entity_cache where expires_at < now();

@@ -7,23 +7,13 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Search, ClipboardPaste, Loader2 } from 'lucide-react';
-import type { MainTopicStrategy } from '@/lib/types/analysis';
+import type { AnalyzeParams, MainTopicStrategy } from '@/lib/types/analysis';
 
 interface AnalyzerFormProps {
   onSubmit: (params: AnalyzeParams) => void;
   isAnalyzing: boolean;
-  hasApiKeys: boolean;
-  isSignedIn: boolean;
-}
-
-export interface AnalyzeParams {
-  mode: 'url' | 'paste';
-  url: string;
-  pasteContent: string;
-  mainTopicStrategy: MainTopicStrategy;
-  clearCache: boolean;
-  runFanout: boolean;
-  fanoutOnly: boolean;
+  hasApiKeys?: boolean;
+  isSignedIn?: boolean;
 }
 
 export function AnalyzerForm({ onSubmit, isAnalyzing, hasApiKeys, isSignedIn }: AnalyzerFormProps) {
@@ -35,7 +25,7 @@ export function AnalyzerForm({ onSubmit, isAnalyzing, hasApiKeys, isSignedIn }: 
   const [runFanout, setRunFanout] = useState(false);
   const [fanoutOnly, setFanoutOnly] = useState(false);
 
-  const canSubmit = hasApiKeys || isSignedIn;
+  const canSubmit = hasApiKeys || isSignedIn || (hasApiKeys === undefined && isSignedIn === undefined);
   const hasInput = mode === 'url' ? url.trim() : pasteContent.trim();
 
   function handleSubmit(e: React.FormEvent) {
