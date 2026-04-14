@@ -286,6 +286,38 @@ function QuotaOrErrorCard({ error }: { error: string }) {
 function FaqSection() {
   const faqs: { q: string; a: React.ReactNode }[] = [
     {
+      q: 'Why is it called The Ontologizer?',
+      a: (
+        <>
+          An <strong>ontology</strong> is a shared vocabulary for describing
+          the things in a subject area and how they relate —{' '}
+          <em>Person</em>, <em>Organization</em>, <em>Product</em>,{' '}
+          <em>author</em>, <em>offers</em>, and so on.{' '}
+          <a
+            href="https://schema.org"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Schema.org
+          </a>{' '}
+          is the biggest ontology on the web: a vocabulary Google, Microsoft,
+          Yahoo, and Yandex agreed to so a machine reading your page can tell
+          that &ldquo;Apple&rdquo; means the company and not the fruit, and
+          that a review belongs to a specific product.
+          <br />
+          <br />
+          Ontologizer turns your unstructured page content <em>into</em>{' '}
+          ontology-friendly structured data — it finds the entities, resolves
+          them against Wikipedia, Wikidata, and Google&apos;s Knowledge Graph,
+          and emits JSON-LD aligned with the right schema.org types. The
+          clearer your entities are, the better search engines and AI
+          Overviews can figure out what your page is actually about — and the
+          more likely you are to be surfaced correctly instead of skipped or
+          hallucinated.
+        </>
+      ),
+    },
+    {
       q: 'What is entity-based SEO and why does it matter?',
       a: (
         <>
