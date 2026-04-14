@@ -23,9 +23,10 @@ export async function getCachedAnalysis(url: string): Promise<Record<string, unk
     .select('result')
     .eq('url_hash', hashUrl(url))
     .gt('expires_at', new Date().toISOString())
-    .single();
+    .maybeSingle();
 
-  return data?.result as Record<string, unknown> | null;
+  if (!data) return null;
+  return (data.result ?? null) as Record<string, unknown> | null;
 }
 
 export async function cacheAnalysis(url: string, result: Record<string, unknown>): Promise<void> {

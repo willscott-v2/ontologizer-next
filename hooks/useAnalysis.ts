@@ -84,6 +84,31 @@ export function useAnalysis() {
       let generateResult: GenerateResult | null = null
       let fanoutResult: FanoutResult | undefined
 
+      // Tier 4: Full-analysis cache short-circuit. URL mode only, honors
+      // clearCache. Cache read failures are non-fatal — fall through to
+      // the normal pipeline.
+      if (params.mode === 'url' && params.url && !params.clearCache) {
+        try {
+          const cacheRes = await fetch('/api/analyze/cache-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: params.url }),
+          })
+          if (cacheRes.ok) {
+            const { cached } = (await cacheRes.json()) as {
+              cached: AnalysisResult | null
+            }
+            if (cached) {
+              setResult({ ...cached, cached: true })
+              setStep('complete')
+              return
+            }
+          }
+        } catch {
+          // non-fatal — continue to live pipeline
+        }
+      }
+
       // Step 1: Extract
       try {
         extractResult = await postJson<ExtractResult>(
@@ -205,6 +230,8 @@ export function useAnalysis() {
             {
               htmlContent: extractResult.textParts.htmlContent,
               url: params.url,
+              contentHash: extractResult.contentHash,
+              clearCache: params.clearCache,
             },
             apiHeaders
           )
@@ -233,6 +260,17 @@ export function useAnalysis() {
 
       setResult(combined)
       setStep('complete')
+
+      // Tier 4 write-through: fire-and-forget persist of the combined
+      // result to analysis_cache. URL mode only. Happens even when
+      // clearCache was true so the cache stays warm.
+      if (params.mode === 'url' && params.url) {
+        fetch('/api/analyze/cache-store', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: params.url, result: combined }),
+        }).catch(() => {})
+      }
     },
     []
   )

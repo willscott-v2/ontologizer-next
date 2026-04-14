@@ -38,6 +38,8 @@ export interface ExtractResult {
   tokenUsage?: number;
   costUsd?: number;
   cached?: boolean;
+  /** md5 of cleaned page text. Used as key for extraction + fanout caches. */
+  contentHash?: string;
 }
 
 // Step 2: Enrich response (per batch)
