@@ -1,0 +1,134 @@
+/**
+ * Search Influence Design System — Design Tokens
+ * Source: AI Website Grader (canonical SI palette)
+ */
+
+:root {
+  /* Core SI Palette */
+  --si-dark-navy: #012c3a;
+  --si-navy: #014a61;
+  --si-medium-blue: #3490b5;
+  --si-light-blue: #4eb1cd;
+  --si-green: #91c364;
+  --si-orange: #f07a18;
+  --si-light-orange: #f89e59;
+  --si-light-gray: #a7a9ac;
+  --si-slate: #34495e;
+  --si-slate-light: #3b5168;
+  --si-hero-start: #43566d;
+  --si-hero-end: #3c4e63;
+  --si-report-green: #24ab59;
+  --si-stripe-dark: #f07a18;
+  --si-header-accent: #f28a22;
+
+  /* Aliases */
+  --dark-blue: var(--si-dark-navy);
+  --lighter-blue: var(--si-slate);
+  --orange-accent: var(--si-orange);
+  --orange-dark: #d96610;
+  --orange-light: var(--si-light-orange);
+
+  /* Secondary */
+  --white: #ffffff;
+  --light-gray: #edf2f5;
+  --medium-gray: #c6d1d8;
+  --dark-gray: #93a1ad;
+  --success-green: var(--si-green);
+  --error-red: #e74c3c;
+  --info-blue: var(--si-medium-blue);
+
+  /* Content area */
+  --content-bg: #ffffff;
+  --content-text: #17374a;
+  --secondary-content: #2f5064;
+  --muted-text: #7f8c8d;
+  --border-gray: #d7e1e8;
+  --background-gray: #f3f5f7;
+  --surface-slate: #405466;
+  --surface-slate-border: rgba(255, 255, 255, 0.12);
+
+  /* Typography */
+  --font-stack: var(--font-open-sans), 'Open Sans', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Spacing */
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 20px;
+  --spacing-lg: 40px;
+  --spacing-xl: 60px;
+  --spacing-2xl: 80px;
+
+  /* Shadcn/ui variable bindings
+   * Shadcn components live inside white cards (.content-area, .form-card
+   * children), so :root is tuned for LIGHT context. The dark body is
+   * applied via explicit CSS in globals.css, not via these tokens.
+   */
+  --background: var(--content-bg);
+  --foreground: var(--content-text);
+  --card: var(--content-bg);
+  --card-foreground: var(--content-text);
+  --popover: var(--content-bg);
+  --popover-foreground: var(--content-text);
+  --primary: var(--si-orange);
+  --primary-foreground: var(--white);
+  --secondary: var(--si-slate);
+  --secondary-foreground: var(--white);
+  --muted: var(--background-gray);
+  --muted-foreground: var(--muted-text);
+  --accent: var(--background-gray);
+  --accent-foreground: var(--content-text);
+  --destructive: var(--error-red);
+  --destructive-foreground: var(--white);
+  --border: var(--border-gray);
+  --input: var(--border-gray);
+  --ring: var(--si-orange);
+  --chart-1: var(--si-green);
+  --chart-2: var(--si-orange);
+  --chart-3: var(--si-medium-blue);
+  --chart-4: var(--orange-dark);
+  --chart-5: var(--si-light-orange);
+  --radius: 0.625rem;
+  --sidebar: var(--si-slate);
+  --sidebar-foreground: var(--white);
+  --sidebar-primary: var(--si-orange);
+  --sidebar-primary-foreground: var(--white);
+  --sidebar-accent: var(--si-slate-light);
+  --sidebar-accent-foreground: var(--white);
+  --sidebar-border: rgba(255, 255, 255, 0.14);
+  --sidebar-ring: var(--si-orange);
+}
+
+.dark {
+  --background: var(--si-dark-navy);
+  --foreground: var(--white);
+  --card: var(--content-bg);
+  --card-foreground: var(--content-text);
+  --popover: var(--content-bg);
+  --popover-foreground: var(--content-text);
+  --primary: var(--si-orange);
+  --primary-foreground: var(--white);
+  --secondary: var(--si-slate);
+  --secondary-foreground: var(--white);
+  --muted: var(--background-gray);
+  --muted-foreground: var(--muted-text);
+  --accent: var(--background-gray);
+  --accent-foreground: var(--content-text);
+  --destructive: var(--error-red);
+  --destructive-foreground: var(--white);
+  --border: var(--border-gray);
+  --input: var(--border-gray);
+  --ring: var(--si-orange);
+  --chart-1: var(--si-green);
+  --chart-2: var(--si-orange);
+  --chart-3: var(--si-medium-blue);
+  --chart-4: var(--orange-dark);
+  --chart-5: var(--si-light-orange);
+  --sidebar: var(--si-slate);
+  --sidebar-foreground: var(--white);
+  --sidebar-primary: var(--si-orange);
+  --sidebar-primary-foreground: var(--white);
+  --sidebar-accent: var(--si-slate-light);
+  --sidebar-accent-foreground: var(--white);
+  --sidebar-border: rgba(255, 255, 255, 0.14);
+  --sidebar-ring: var(--si-orange);
+}

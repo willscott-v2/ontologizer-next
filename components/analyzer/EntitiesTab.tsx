@@ -78,6 +78,9 @@ export function EntitiesTab({ entities }: EntitiesTabProps) {
                   label="ProductOntology"
                 />
               )}
+              {entity.linkedinUrl && (
+                <EntityLink href={entity.linkedinUrl} label="LinkedIn" />
+              )}
             </div>
           </CardContent>
         </Card>

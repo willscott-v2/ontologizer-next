@@ -12,8 +12,10 @@ npm install
 cp .env.local.example .env.local
 # Edit .env.local with your Supabase and API keys
 
-# 3. Set up database
-# Run supabase/migrations/001_initial_schema.sql in your Supabase SQL Editor
+# 3. Set up database — run these in your Supabase SQL Editor, in order:
+#    - supabase/migrations/001_initial_schema.sql
+#    - supabase/migrations/002_ontologizer_next.sql (optional; only if migrating
+#      from an older ontologizer-app schema)
 
 # 4. Start dev server
 npm run dev
@@ -27,8 +29,9 @@ Open [http://localhost:3000](http://localhost:3000).
 - **Multi-Source Enrichment** - Each entity enriched via Wikipedia, Wikidata, Google Knowledge Graph, and ProductOntology in parallel
 - **JSON-LD Generation** - Schema.org markup for WebPage, Article, Service, LocalBusiness, EducationalProgram, FAQ, HowTo
 - **SEO Recommendations** - AI-powered content optimization suggestions with topical salience scoring
-- **Fan-out Analysis** - Gemini 2.0 predicts how Google AI might decompose queries about your content
-- **BYOK** - Bring your own API keys for unlimited use, or sign up for 5 free analyses/month
+- **Fan-out Analysis** - Gemini 2.5 predicts how Google AI might decompose queries about your content, with per-query coverage scoring
+- **LinkedIn resolution** - For person entities, scans the source page for matching LinkedIn profile links
+- **BYOK** - Bring your own API keys for unlimited use, or sign up (magic link) for 5 free analyses/month
 
 ## Self-Hosting
 

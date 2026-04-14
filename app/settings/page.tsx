@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Eye, EyeOff, Save, Trash2, ExternalLink } from 'lucide-react';
+import { Eye, EyeOff, Save, Trash2, ExternalLink, ArrowLeft } from 'lucide-react';
 import { useApiKeys } from '@/hooks/useApiKeys';
 import { toast } from 'sonner';
 
@@ -90,14 +91,24 @@ export default function SettingsPage() {
   if (!loaded) return null;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">API Keys</h1>
-        <p className="text-gray-500">
-          Add your own API keys to use Ontologizer without limits.
-          Keys are stored in your browser only and sent directly to the APIs.
-        </p>
-      </div>
+    <section className="main-section">
+      <div className="si-container">
+        <div className="mx-auto max-w-3xl space-y-6">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-[var(--orange-accent)] hover:text-[var(--orange-light)] transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to analyzer
+          </Link>
+
+          <div>
+            <h1 className="text-2xl font-bold text-white">API Keys</h1>
+            <p className="text-white/70">
+              Add your own API keys to use Ontologizer without limits.
+              Keys are stored in your browser only and sent directly to the APIs.
+            </p>
+          </div>
 
       <Card>
         <CardHeader>
@@ -157,29 +168,31 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Free Tier</CardTitle>
-          <CardDescription>
-            Signed-in users get 5 free analyses per month without providing any API keys.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-gray-600">
-            Need more than 5 per month? Add your own API keys above for unlimited use,
-            or self-host the{' '}
-            <a
-              href="https://github.com/willscott-v2/ontologizer"
-              className="text-blue-600 hover:underline"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              open-source version
-            </a>
-            .
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Free Tier</CardTitle>
+              <CardDescription>
+                Signed-in users get 5 free analyses per month without providing any API keys.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600">
+                Need more than 5 per month? Add your own API keys above for unlimited use,
+                or self-host the{' '}
+                <a
+                  href="https://github.com/willscott-v2/ontologizer"
+                  className="text-blue-600 hover:underline"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  open-source version
+                </a>
+                .
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </section>
   );
 }

@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { FanoutResult } from '../../../../lib/types/analysis';
 import { analyzeFanout } from '../../../../lib/pipeline/fanout-analyzer';
+import { createClient } from '@/lib/supabase/server';
 
 interface FanoutRequestBody {
   htmlContent: string;
@@ -32,21 +33,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const geminiKey = request.headers.get('X-Gemini-Key') || undefined;
+    let geminiKey = request.headers.get('X-Gemini-Key') || undefined;
+
+    // Signed-in users fall back to the app's Gemini key
+    if (!geminiKey) {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        geminiKey = process.env.GEMINI_API_KEY || undefined;
+      }
+    }
 
     if (!geminiKey) {
       const result: FanoutResult = {
         analysis: null,
         chunksExtracted: 0,
         chunks: [],
-        error: 'Gemini API key required. Pass it via X-Gemini-Key header.',
+        error:
+          'Gemini API key required — add one in Settings, or sign in to use the free tier.',
       };
-      return NextResponse.json(result, { status: 400 });
+      return NextResponse.json(result, { status: 200 });
     }
 
     const result = await analyzeFanout(htmlContent, url, geminiKey);
-
-    // Return 200 even if analysis has an error (the error field conveys it)
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Internal server error';

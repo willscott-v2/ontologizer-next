@@ -1,10 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Search, ClipboardPaste, Loader2 } from 'lucide-react';
 import type { AnalyzeParams, MainTopicStrategy } from '@/lib/types/analysis';
@@ -35,146 +31,177 @@ export function AnalyzerForm({ onSubmit, isAnalyzing, hasApiKeys, isSignedIn }: 
   }
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Mode toggle */}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setMode('url')}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                mode === 'url'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <Search className="h-3.5 w-3.5" />
-              Analyze URL
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('paste')}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                mode === 'paste'
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <ClipboardPaste className="h-3.5 w-3.5" />
-              Paste Content
-            </button>
-          </div>
+    <form onSubmit={handleSubmit}>
+      {/* Mode toggle */}
+      <div className="input-mode-toggle">
+        <button
+          type="button"
+          onClick={() => setMode('url')}
+          className={mode === 'url' ? 'active' : ''}
+          disabled={isAnalyzing}
+        >
+          <Search className="h-4 w-4" />
+          Analyze URL
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('paste')}
+          className={mode === 'paste' ? 'active' : ''}
+          disabled={isAnalyzing}
+        >
+          <ClipboardPaste className="h-4 w-4" />
+          Paste Content
+        </button>
+      </div>
 
-          {/* Input */}
-          {mode === 'url' ? (
-            <div className="space-y-1.5">
-              <Label htmlFor="url">URL to analyze</Label>
-              <Input
-                id="url"
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://example.com/page-to-analyze"
-                disabled={isAnalyzing}
-              />
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <Label htmlFor="paste">Paste HTML, Markdown, or plain text</Label>
-              <textarea
-                id="paste"
-                value={pasteContent}
-                onChange={(e) => setPasteContent(e.target.value)}
-                placeholder="Paste your content here..."
-                rows={6}
-                disabled={isAnalyzing}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              />
-            </div>
-          )}
-
-          {/* Options row */}
-          <div className="flex flex-wrap items-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <Label htmlFor="strategy" className="text-gray-500">
-                Topic strategy:
-              </Label>
-              <select
-                id="strategy"
-                value={mainTopicStrategy}
-                onChange={(e) => setMainTopicStrategy(e.target.value as MainTopicStrategy)}
-                disabled={isAnalyzing}
-                className="rounded-md border px-2 py-1 text-sm"
-              >
-                <option value="strict">Title + Body (strict)</option>
-                <option value="title">Title only</option>
-                <option value="frequent">Most frequent</option>
-                <option value="pattern">Pattern match</option>
-              </select>
-            </div>
-
-            <label className="flex items-center gap-1.5 text-gray-500">
-              <input
-                type="checkbox"
-                checked={clearCache}
-                onChange={(e) => setClearCache(e.target.checked)}
-                disabled={isAnalyzing}
-              />
-              Fresh analysis
-            </label>
-
-            <label className="flex items-center gap-1.5 text-gray-500">
-              <input
-                type="checkbox"
-                checked={runFanout}
-                onChange={(e) => {
-                  setRunFanout(e.target.checked);
-                  if (!e.target.checked) setFanoutOnly(false);
-                }}
-                disabled={isAnalyzing}
-              />
-              Fan-out analysis
-            </label>
-
-            {runFanout && (
-              <label className="flex items-center gap-1.5 text-gray-500">
-                <input
-                  type="checkbox"
-                  checked={fanoutOnly}
-                  onChange={(e) => setFanoutOnly(e.target.checked)}
-                  disabled={isAnalyzing}
-                />
-                Fan-out only
-              </label>
+      {/* Input */}
+      {mode === 'url' ? (
+        <div className="url-input-group">
+          <input
+            id="url"
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://example.com/page-to-analyze"
+            disabled={isAnalyzing}
+            className="url-input"
+          />
+          <button
+            type="submit"
+            disabled={isAnalyzing || !hasInput || !canSubmit}
+            className="analyze-btn"
+          >
+            {isAnalyzing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              'Analyze'
             )}
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="form-group">
+            <label htmlFor="paste">Paste HTML, Markdown, or plain text</label>
+            <textarea
+              id="paste"
+              value={pasteContent}
+              onChange={(e) => setPasteContent(e.target.value)}
+              placeholder="Paste your content here..."
+              rows={8}
+              disabled={isAnalyzing}
+              className="si-textarea"
+            />
           </div>
-
-          {/* Submit */}
-          <div className="flex items-center gap-3">
-            <Button type="submit" disabled={isAnalyzing || !hasInput || !canSubmit}>
-              {isAnalyzing ? (
-                <>
-                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  Analyzing...
-                </>
-              ) : (
-                'Analyze'
-              )}
-            </Button>
-
-            {!canSubmit && (
-              <p className="text-sm text-gray-500">
-                <a href="/auth/login" className="text-blue-600 hover:underline">Sign in</a>
-                {' '}for free analyses or{' '}
-                <a href="/settings" className="text-blue-600 hover:underline">add API keys</a>
-              </p>
+          <button
+            type="submit"
+            disabled={isAnalyzing || !hasInput || !canSubmit}
+            className="analyze-btn w-full"
+          >
+            {isAnalyzing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              'Analyze'
             )}
+          </button>
+        </>
+      )}
 
-            {hasApiKeys && <Badge variant="secondary">Using your API keys</Badge>}
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+      {/* Options row */}
+      <div className="flex flex-wrap items-center gap-4 text-sm text-white/80 mt-6">
+        <div
+          className="flex items-center gap-2"
+          title="How Ontologizer picks the page's main topic. Strict = uses both title and body; Title only = title tag only; Most frequent = most-repeated entity; Pattern = regex-style pattern matching."
+        >
+          <label htmlFor="strategy" className="text-white/70">
+            Topic strategy
+            <span className="ml-1 text-white/50" aria-hidden="true">
+              ⓘ
+            </span>
+          </label>
+          <select
+            id="strategy"
+            value={mainTopicStrategy}
+            onChange={(e) => setMainTopicStrategy(e.target.value as MainTopicStrategy)}
+            disabled={isAnalyzing}
+            className="rounded-md border border-white/20 bg-white/10 px-2 py-1 text-sm text-white"
+          >
+            <option value="strict">Title + Body (strict)</option>
+            <option value="title">Title only</option>
+            <option value="frequent">Most frequent</option>
+            <option value="pattern">Pattern match</option>
+          </select>
+        </div>
+
+        <label
+          className="flex items-center gap-1.5 cursor-pointer"
+          title="Skip the 1-hour URL cache and the 7-day entity enrichment cache. Use this if the page has changed recently."
+        >
+          <input
+            type="checkbox"
+            checked={clearCache}
+            onChange={(e) => setClearCache(e.target.checked)}
+            disabled={isAnalyzing}
+            className="accent-[var(--orange-accent)]"
+          />
+          Fresh analysis
+          <span className="text-white/40" aria-hidden="true">ⓘ</span>
+        </label>
+
+        <label
+          className="flex items-center gap-1.5 cursor-pointer"
+          title="Also run Gemini fan-out: a simulation of how Google AI Mode decomposes queries about this page, with coverage scoring per sub-query."
+        >
+          <input
+            type="checkbox"
+            checked={runFanout}
+            onChange={(e) => {
+              setRunFanout(e.target.checked);
+              if (!e.target.checked) setFanoutOnly(false);
+            }}
+            disabled={isAnalyzing}
+            className="accent-[var(--orange-accent)]"
+          />
+          Fan-out analysis
+          <span className="text-white/40" aria-hidden="true">ⓘ</span>
+        </label>
+
+        {runFanout && (
+          <label
+            className="flex items-center gap-1.5 cursor-pointer"
+            title="Skip entity enrichment, JSON-LD, and recommendations — run only the fan-out step. Fastest path if you just want the query-decomposition report."
+          >
+            <input
+              type="checkbox"
+              checked={fanoutOnly}
+              onChange={(e) => setFanoutOnly(e.target.checked)}
+              disabled={isAnalyzing}
+              className="accent-[var(--orange-accent)]"
+            />
+            Fan-out only
+            <span className="text-white/40" aria-hidden="true">ⓘ</span>
+          </label>
+        )}
+
+        {hasApiKeys && <Badge variant="secondary">Using your API keys</Badge>}
+      </div>
+
+      {!canSubmit && (
+        <p className="text-sm text-white/70 mt-4">
+          <a href="/auth/login" className="text-[var(--orange-accent)] hover:underline">
+            Sign in
+          </a>
+          {' '}for free analyses or{' '}
+          <a href="/settings" className="text-[var(--orange-accent)] hover:underline">
+            add API keys
+          </a>
+        </p>
+      )}
+    </form>
   );
 }

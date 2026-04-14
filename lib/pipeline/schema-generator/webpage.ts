@@ -1,13 +1,19 @@
 /**
  * WebPage schema generator (fallback default).
- * Ported from PHP generate_webpage_schema() (lines 1918-1966).
+ * Emits a @graph with Organization + WebSite + WebPage so the site-level
+ * Organization is discoverable from every page.
  */
 
+import * as cheerio from 'cheerio';
 import type { EnrichedEntity } from '../../types/entities';
 import type { TextParts } from '../../types/analysis';
 import {
   buildAboutEntities,
-  validateAndEnhance,
+  buildOrganizationNode,
+  buildWebSiteNode,
+  organizationId,
+  webPageId,
+  websiteId,
 } from './helpers';
 import { extractAdditionalSchemas } from './additional';
 
@@ -16,42 +22,73 @@ export function generateWebPageSchema(
   textParts: TextParts,
   url: string,
 ): Record<string, unknown> {
-  const schema: Record<string, unknown> = {
-    '@context': 'https://schema.org',
+  const $ = cheerio.load(textParts.htmlContent || '');
+  const orgNode = buildOrganizationNode(url, textParts.htmlContent);
+  const websiteNode = buildWebSiteNode(url, $);
+
+  const webPageNode: Record<string, unknown> = {
     '@type': 'WebPage',
+    '@id': webPageId(url),
     url,
   };
 
-  if (textParts.title) {
-    schema.name = textParts.title;
+  if (textParts.title) webPageNode.name = textParts.title;
+  if (textParts.description) webPageNode.description = textParts.description;
+
+  if (orgNode) {
+    webPageNode.publisher = { '@id': organizationId(url) };
   }
-  if (textParts.description) {
-    schema.description = textParts.description;
+  if (websiteNode) {
+    webPageNode.isPartOf = { '@id': websiteId(url) };
   }
 
-  // Extract additional schemas (author, org, FAQ, HowTo) from HTML
+  const ogImage = $('meta[property="og:image"]').attr('content');
+  if (ogImage) {
+    try {
+      webPageNode.primaryImageOfPage = new URL(ogImage, url).href;
+    } catch {
+      // ignore
+    }
+  }
+
+  // Additional schemas
   const additional = extractAdditionalSchemas(textParts.htmlContent);
-
   if (additional.author) {
-    schema.author = additional.author;
-  }
-  if (additional.organization) {
-    schema.publisher = additional.organization;
+    webPageNode.author = additional.author;
   }
   if (additional.faq) {
-    schema.mainEntity = additional.faq;
+    webPageNode.mainEntity = additional.faq;
   }
-  // HowTo overrides FAQ for mainEntity if both present (matches PHP behavior)
   if (additional.howto) {
-    schema.mainEntity = additional.howto;
+    webPageNode.mainEntity = additional.howto;
   }
 
-  // Add entity references
+  // Entity references
   const aboutEntities = buildAboutEntities(entities);
   if (aboutEntities.length > 0) {
-    schema.about = aboutEntities;
-    schema.mentions = aboutEntities;
+    webPageNode.about = aboutEntities.slice(0, 4);
+    if (aboutEntities.length > 4) {
+      webPageNode.mentions = aboutEntities.slice(4, 10);
+    }
   }
 
-  return validateAndEnhance(schema);
+  webPageNode.speakable = {
+    '@type': 'SpeakableSpecification',
+    xpath: [
+      '/html/head/title',
+      '/html/head/meta[@name="description"]',
+      '/html/body//h1',
+      '/html/body//h2',
+    ],
+  };
+
+  const graph: Record<string, unknown>[] = [];
+  if (orgNode) graph.push(orgNode);
+  if (websiteNode) graph.push(websiteNode);
+  graph.push(webPageNode);
+
+  return {
+    '@context': 'https://schema.org',
+    '@graph': graph,
+  };
 }

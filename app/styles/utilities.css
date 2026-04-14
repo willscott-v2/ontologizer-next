@@ -1,0 +1,44 @@
+/**
+ * Search Influence Design System — Utilities
+ */
+
+/* Small spacing/alignment utils (used by SI component classes) */
+.text-center { text-align: center; }
+.mb-4 { margin-bottom: 20px; }
+.mb-6 { margin-bottom: 30px; }
+.mb-8 { margin-bottom: 40px; }
+.mt-4 { margin-top: 20px; }
+.mt-6 { margin-top: 30px; }
+.mt-8 { margin-top: 40px; }
+.si-hidden { display: none; }
+.si-show { display: block; }
+
+/* Orange gradient button (used for hero CTAs) */
+.btn-gradient-orange {
+  background: linear-gradient(135deg, var(--orange-accent) 0%, var(--orange-dark) 100%);
+  box-shadow: 0 4px 15px rgba(240, 122, 24, 0.3);
+  transition: all 0.3s ease;
+  color: var(--white);
+  border: none;
+}
+
+.btn-gradient-orange:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(240, 122, 24, 0.4);
+  background: linear-gradient(135deg, var(--orange-light) 0%, var(--orange-accent) 100%);
+}
+
+.text-gradient-orange {
+  background: linear-gradient(135deg, var(--orange-accent) 0%, var(--orange-dark) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

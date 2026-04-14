@@ -131,10 +131,8 @@ function calculateWikipediaMatchScore(
 
 // ── Verification ───────────────────────────────────────────────────────
 
-async function verifyWikipediaPageContent(
-  url: string,
-  entityLower: string,
-): Promise<boolean> {
+/** Fetch first-paragraph extract for a Wikipedia URL and return lowercased text. */
+async function fetchWikipediaExtract(url: string): Promise<string | null> {
   const pageTitle = decodeURIComponent(url.split('/').pop() ?? '');
   const apiUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&titles=${encodeURIComponent(pageTitle)}&format=json&exlimit=1`;
 
@@ -142,26 +140,116 @@ async function verifyWikipediaPageContent(
     query?: { pages?: Record<string, { extract?: string }> };
   }>(apiUrl, 6000);
 
-  if (!data?.query?.pages) return false;
+  if (!data?.query?.pages) return null;
 
   for (const page of Object.values(data.query.pages)) {
     if (page.extract) {
-      // Strip HTML tags from the extract
-      const extract = page.extract.replace(/<[^>]+>/g, '');
-      const extractLower = extract.toLowerCase();
-
-      // Check entity name in first paragraph
-      if (extractLower.includes(entityLower)) return true;
-
-      // Check entity words
-      const words = entityLower.split(/\s+/).filter((w) => w.length > 2);
-      if (words.length === 0) return false;
-      const foundWords = words.filter((w) => extractLower.includes(w)).length;
-      return foundWords / words.length >= 0.5;
+      return page.extract.replace(/<[^>]+>/g, '').toLowerCase();
     }
   }
+  return null;
+}
 
-  return false;
+async function verifyWikipediaPageContent(
+  url: string,
+  entityLower: string,
+): Promise<boolean> {
+  const extractLower = await fetchWikipediaExtract(url);
+  if (!extractLower) return false;
+
+  if (extractLower.includes(entityLower)) return true;
+
+  const words = entityLower.split(/\s+/).filter((w) => w.length > 2);
+  if (words.length === 0) return false;
+  const foundWords = words.filter((w) => extractLower.includes(w)).length;
+  return foundWords / words.length >= 0.5;
+}
+
+/** Profession/domain keywords that strongly signal an unrelated homonym
+ *  when they appear in the Wikipedia extract without matching page context. */
+const UNRELATED_PROFESSION_WORDS = [
+  'musician', 'singer', 'songwriter', 'rapper', 'drummer', 'guitarist',
+  'pianist', 'violinist', 'composer', 'bassist', 'bandleader',
+  'actor', 'actress', 'filmmaker', 'screenwriter', 'playwright',
+  'athlete', 'footballer', 'basketball player', 'baseball player',
+  'ice hockey', 'rugby player', 'cricketer', 'wrestler', 'boxer',
+  'sprinter', 'swimmer',
+  'politician', 'senator', 'governor', 'mp ', 'diplomat', 'ambassador',
+  'soldier', 'general', 'admiral', 'military officer',
+  'novelist', 'poet', 'essayist',
+  'theologian', 'bishop', 'priest', 'clergyman',
+  'serial killer', 'convicted',
+];
+
+/**
+ * Strict person-context verification. Given a candidate Wikipedia URL and
+ * page context, accept the match only if the first-paragraph extract shows
+ * topical alignment — otherwise we're probably linking to the wrong person
+ * (the classic "Will Scott the blues musician" problem).
+ *
+ * Rules:
+ *   1. Build 2+ word phrases from mainTopic and require at least one to
+ *      appear in the extract. Generic single-word hits aren't enough
+ *      ("education" matches thousands of bios coincidentally).
+ *   2. If no phrase matches but the extract contains an obvious unrelated
+ *      profession word (musician, footballer, etc.), reject outright.
+ *   3. If mainTopic is only one meaningful word, fall back to an exact
+ *      single-word match that must be present.
+ */
+async function verifyPersonAgainstContext(
+  url: string,
+  mainTopic: string,
+): Promise<boolean> {
+  if (!mainTopic) return true;
+  const extractLower = await fetchWikipediaExtract(url);
+  if (!extractLower) return false;
+
+  const topicLower = mainTopic
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const stopWords = new Set([
+    'the', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for', 'with',
+    'by', 'a', 'an', 'is', 'are', 'was', 'were',
+    'services', 'service', 'solutions',
+  ]);
+  const topicWords = topicLower
+    .split(' ')
+    .filter((w) => w.length >= 4 && !stopWords.has(w));
+
+  // Try phrase matches (2+ adjacent meaningful words)
+  if (topicWords.length >= 2) {
+    for (let n = Math.min(3, topicWords.length); n >= 2; n--) {
+      for (let i = 0; i <= topicWords.length - n; i++) {
+        const phrase = topicWords.slice(i, i + n).join(' ');
+        if (extractLower.includes(phrase)) return true;
+      }
+    }
+
+    // No phrase matched → reject hard if the extract looks like an unrelated
+    // profession page
+    if (UNRELATED_PROFESSION_WORDS.some((w) => extractLower.includes(w))) {
+      return false;
+    }
+
+    // No phrase and no clear unrelated-profession flag — be conservative and
+    // reject. Wrong links hurt AI-search trust more than missing links.
+    return false;
+  }
+
+  // Single-word topic fallback: require the one word to appear
+  if (topicWords.length === 1) {
+    return extractLower.includes(topicWords[0]);
+  }
+
+  return true;
+}
+
+function looksLikePersonName(name: string): boolean {
+  // Two Title-Case words, optionally with middle initials
+  return /^[A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+$/.test(name.trim());
 }
 
 // ── Best match selection ───────────────────────────────────────────────
@@ -315,5 +403,14 @@ export async function findWikipediaUrl(
   if (!data || !data[1]?.length || !data[3]?.length) return null;
 
   const match = await findBestWikipediaMatch(entity, data[1], data[3]);
-  return match?.url ?? null;
+  if (!match) return null;
+
+  // Person disambiguation: require page context to match before accepting
+  // a Firstname Lastname match (otherwise we'll often link the wrong homonym)
+  if (looksLikePersonName(entity) && mainTopic) {
+    const contextOk = await verifyPersonAgainstContext(match.url, mainTopic);
+    if (!contextOk) return null;
+  }
+
+  return match.url;
 }

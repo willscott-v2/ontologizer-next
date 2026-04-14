@@ -23,33 +23,40 @@ export function ResultsTabs({ result }: ResultsTabsProps) {
   const hasFanout = !!result.fanoutAnalysis
 
   return (
-    <div className="space-y-4">
-      {/* Stats bar */}
-      <div className="flex flex-wrap items-center gap-4 rounded-lg bg-muted/50 p-3 text-sm">
-        <div className="flex items-center gap-1.5 text-muted-foreground">
-          <Clock className="size-3.5" />
-          <span>{formatMs(result.processingTimeMs)}</span>
-        </div>
+    <div className="space-y-5">
+      {/* Stats + salience bar */}
+      <div className="rounded-xl border border-[var(--border-gray)] bg-[var(--background-gray)] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          {result.topicalSalience.score > 0 ? (
+            <SalienceScore
+              score={result.topicalSalience.score}
+              mainTopic={result.topicalSalience.mainTopic}
+            />
+          ) : (
+            <div className="text-sm text-[var(--muted-text)]">
+              Salience score unavailable
+            </div>
+          )}
 
-        <div className="text-muted-foreground">
-          {result.entities.length} entit{result.entities.length === 1 ? 'y' : 'ies'}
-        </div>
-
-        {result.topicalSalience.score > 0 && (
-          <SalienceScore
-            score={result.topicalSalience.score}
-            mainTopic={result.topicalSalience.mainTopic}
-          />
-        )}
-
-        {result.cached && (
-          <div className="flex items-center gap-1.5">
-            <Database className="size-3.5 text-muted-foreground" />
-            <Badge variant="secondary" className="text-xs">
-              Cached
-            </Badge>
+          <div className="flex items-center gap-4 text-sm text-[var(--muted-text)]">
+            <div className="flex items-center gap-1.5">
+              <Clock className="size-3.5" />
+              <span>{formatMs(result.processingTimeMs)}</span>
+            </div>
+            <div>
+              {result.entities.length} entit
+              {result.entities.length === 1 ? 'y' : 'ies'}
+            </div>
+            {result.cached && (
+              <div className="flex items-center gap-1.5">
+                <Database className="size-3.5" />
+                <Badge variant="secondary" className="text-xs">
+                  Cached
+                </Badge>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Tabs */}

@@ -119,6 +119,7 @@ export function useAnalysis() {
             {
               entities: batches[i],
               mainTopic: extractResult.mainTopic,
+              htmlContent: extractResult.textParts.htmlContent,
             },
             apiHeaders
           )

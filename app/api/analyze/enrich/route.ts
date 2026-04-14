@@ -8,6 +8,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { enrichEntities } from '@/lib/pipeline/enricher';
+import { findLinkedInFromHtml } from '@/lib/pipeline/enricher/linkedin';
 import { getCachedEntities, cacheEntities } from '@/lib/cache/entity-cache';
 import type { RawEntity, EnrichedEntity } from '@/lib/types/entities';
 import type { EnrichResult } from '@/lib/types/analysis';
@@ -15,6 +16,7 @@ import type { EnrichResult } from '@/lib/types/analysis';
 interface EnrichRequestBody {
   entities: RawEntity[];
   mainTopic: string;
+  htmlContent?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -65,6 +67,16 @@ export async function POST(request: NextRequest) {
         (f) => f.name.toLowerCase() === e.name.toLowerCase()
       ) ?? { name: e.name, type: 'Thing' as const, confidenceScore: 0, wikipediaUrl: null, wikidataUrl: null, googleKgUrl: null, productOntologyUrl: null };
     });
+
+    // Attach page-scoped LinkedIn URLs for person entities (not cached since
+    // the match is specific to the source page's link graph)
+    if (body.htmlContent) {
+      for (const entity of enrichedEntities) {
+        if (entity.type === 'Person') {
+          entity.linkedinUrl = findLinkedInFromHtml(entity.name, body.htmlContent);
+        }
+      }
+    }
 
     const result: EnrichResult = {
       enrichedEntities,

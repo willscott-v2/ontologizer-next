@@ -1,24 +1,35 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Open_Sans } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import {
+  GoogleTagManager,
+  GoogleTagManagerNoScript,
+} from "@/components/layout/GoogleTagManager";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const openSans = Open_Sans({
   subsets: ["latin"],
+  weight: ["300", "400", "600", "800"],
+  display: "swap",
+  variable: "--font-open-sans",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const gscVerification = process.env.GOOGLE_SEARCH_CONSOLE_VERIFICATION;
 
 export const metadata: Metadata = {
   title: "Ontologizer - Entity Extraction & Structured Data",
   description:
     "Extract named entities from webpages, enrich with Wikipedia/Wikidata/Knowledge Graph, and generate JSON-LD structured data for SEO.",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/favicon.ico",
+  },
+  ...(gscVerification && {
+    verification: { google: gscVerification },
+  }),
 };
 
 export default function RootLayout({
@@ -27,15 +38,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="flex min-h-full flex-col bg-gray-50">
+    <html lang="en" className={`${openSans.variable} h-full antialiased`}>
+      <head suppressHydrationWarning>
+        <GoogleTagManager />
+      </head>
+      <body className="flex min-h-full flex-col">
+        <GoogleTagManagerNoScript />
         <Header />
-        <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
-          {children}
-        </main>
+        <main className="flex-1">{children}</main>
         <Footer />
         <Toaster />
       </body>

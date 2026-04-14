@@ -5,32 +5,36 @@ interface SalienceScoreProps {
   mainTopic: string
 }
 
-function getScoreColor(score: number): string {
-  if (score >= 80) return 'text-green-600 dark:text-green-400'
-  if (score >= 60) return 'text-yellow-600 dark:text-yellow-400'
-  if (score >= 40) return 'text-orange-600 dark:text-orange-400'
-  return 'text-red-600 dark:text-red-400'
-}
-
-function getScoreLabel(score: number): string {
-  if (score >= 80) return 'Excellent'
-  if (score >= 60) return 'Good'
-  if (score >= 40) return 'Moderate'
-  return 'Limited'
+function getScoreStyles(score: number): { color: string; bg: string; label: string } {
+  if (score >= 80) return { color: '#166534', bg: '#dcfce7', label: 'Excellent' }
+  if (score >= 60) return { color: '#854d0e', bg: '#fef9c3', label: 'Good' }
+  if (score >= 40) return { color: '#9a3412', bg: '#ffedd5', label: 'Moderate' }
+  return { color: '#991b1b', bg: '#fee2e2', label: 'Limited' }
 }
 
 export function SalienceScore({ score, mainTopic }: SalienceScoreProps) {
+  const { color, bg, label } = getScoreStyles(score)
   return (
-    <div className="flex items-center gap-3">
-      <div className="text-center">
-        <div className={`text-2xl font-bold tabular-nums ${getScoreColor(score)}`}>
-          {score}
+    <div className="flex items-center gap-4">
+      <div
+        className="flex flex-col items-center justify-center rounded-xl px-4 py-2 tabular-nums shrink-0"
+        style={{ background: bg, color, minWidth: 88 }}
+      >
+        <div className="text-3xl font-extrabold leading-none">{score}</div>
+        <div className="mt-1 text-[11px] font-semibold uppercase tracking-wider">
+          {label}
         </div>
-        <div className="text-xs text-muted-foreground">{getScoreLabel(score)}</div>
       </div>
-      <div className="text-sm text-muted-foreground">
-        Topic: <span className="font-medium text-foreground">{mainTopic}</span>
-      </div>
+      {mainTopic && (
+        <div className="min-w-0">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-text)]">
+            Main Topic
+          </div>
+          <div className="text-base font-semibold text-[var(--content-text)] truncate">
+            {mainTopic}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

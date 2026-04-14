@@ -25,4 +25,6 @@ export interface EnrichedEntity {
   wikidataUrl: string | null;
   googleKgUrl: string | null;
   productOntologyUrl: string | null;
+  /** LinkedIn profile URL for people, when disambiguated from page context. */
+  linkedinUrl?: string | null;
 }

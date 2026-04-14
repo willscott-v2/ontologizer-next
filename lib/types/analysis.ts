@@ -16,7 +16,15 @@ export interface TextParts {
 
 // Semantic chunk for fan-out analysis
 export interface SemanticChunk {
-  type: 'primary_topic' | 'section' | 'list' | 'structured_data';
+  type:
+    | 'primary_topic'
+    | 'section'
+    | 'list'
+    | 'structured_data'
+    | 'paragraphs'
+    | 'questions_on_page'
+    | 'key_terms'
+    | 'page_metadata';
   heading?: string;
   content: string;
 }

@@ -16,8 +16,8 @@ const NON_ENTITY_PATTERNS = [
   /pricing/i, /location/i, /reliability/i, /efficiency/i, /comfort/i,
   /framework/i, /reports?/i, /surveys?/i, /meet.?greet/i, /pick.?up/i, /drop.?off/i,
   /car.?seat/i, /booster/i, /flight.?status/i, /white.?papers/i, /ai.?search.?success/i,
-  /intelligence.?reports/i, /working.?genius/i, /semrush/i, /widget/i, /sidebar/i,
-  /advertisement/i, /banner/i, /social.?media/i, /cookie/i, /consent/i, /share/i,
+  /intelligence.?reports/i, /working.?genius/i, /widget/i, /sidebar/i,
+  /advertisement/i, /banner/i, /cookie/i, /consent/i, /share/i,
   /^wonder$/i, /^invention$/i, /^discernment$/i, /^tenacity$/i, /^enablement$/i,
   /^galvanizing$/i, /^empowerment$/i, /^synergy$/i, /^leverage$/i, /^optimization$/i,
   /^transformation$/i, /^innovation$/i, /^excellence$/i, /^leadership$/i,
@@ -31,10 +31,154 @@ const UNLIKELY_WIKIPEDIA_PATTERNS = [
   /^(program pages|geo-targeted keywords)$/i,
 ];
 
+/** Entities that almost always come from template chrome (sharing widgets,
+ *  RSS icons, newsletter forms) and rarely belong to the actual page topic. */
 const TEMPLATE_ENTITIES = new Set([
-  'semrush', 'google analytics', 'facebook', 'twitter', 'linkedin', 'instagram',
-  'youtube', 'pinterest', 'tiktok', 'snapchat', 'subscribe', 'newsletter', 'rss',
+  'subscribe', 'newsletter', 'rss',
 ]);
+
+/** Known reference entities we short-circuit to avoid flaky Wikipedia search.
+ *  Lowercase key → canonical enrichment targets. */
+const KNOWN_ENTITIES: Record<
+  string,
+  {
+    wikipedia: string;
+    wikidata: string;
+    googleKg?: string;
+    type?: EntityType;
+  }
+> = {
+  'social media': {
+    wikipedia: 'https://en.wikipedia.org/wiki/Social_media',
+    wikidata: 'https://www.wikidata.org/wiki/Q202833',
+    type: 'Thing',
+  },
+  instagram: {
+    wikipedia: 'https://en.wikipedia.org/wiki/Instagram',
+    wikidata: 'https://www.wikidata.org/wiki/Q209330',
+    type: 'Organization',
+  },
+  facebook: {
+    wikipedia: 'https://en.wikipedia.org/wiki/Facebook',
+    wikidata: 'https://www.wikidata.org/wiki/Q355',
+    type: 'Organization',
+  },
+  twitter: {
+    wikipedia: 'https://en.wikipedia.org/wiki/Twitter',
+    wikidata: 'https://www.wikidata.org/wiki/Q918',
+    type: 'Organization',
+  },
+  'x (formerly twitter)': {
+    wikipedia: 'https://en.wikipedia.org/wiki/Twitter',
+    wikidata: 'https://www.wikidata.org/wiki/Q918',
+    type: 'Organization',
+  },
+  linkedin: {
+    wikipedia: 'https://en.wikipedia.org/wiki/LinkedIn',
+    wikidata: 'https://www.wikidata.org/wiki/Q207621',
+    type: 'Organization',
+  },
+  youtube: {
+    wikipedia: 'https://en.wikipedia.org/wiki/YouTube',
+    wikidata: 'https://www.wikidata.org/wiki/Q866',
+    type: 'Organization',
+  },
+  tiktok: {
+    wikipedia: 'https://en.wikipedia.org/wiki/TikTok',
+    wikidata: 'https://www.wikidata.org/wiki/Q58412393',
+    type: 'Organization',
+  },
+  pinterest: {
+    wikipedia: 'https://en.wikipedia.org/wiki/Pinterest',
+    wikidata: 'https://www.wikidata.org/wiki/Q255381',
+    type: 'Organization',
+  },
+  reddit: {
+    wikipedia: 'https://en.wikipedia.org/wiki/Reddit',
+    wikidata: 'https://www.wikidata.org/wiki/Q1136',
+    type: 'Organization',
+  },
+  snapchat: {
+    wikipedia: 'https://en.wikipedia.org/wiki/Snapchat',
+    wikidata: 'https://www.wikidata.org/wiki/Q1058874',
+    type: 'Organization',
+  },
+  'google analytics': {
+    wikipedia: 'https://en.wikipedia.org/wiki/Google_Analytics',
+    wikidata: 'https://www.wikidata.org/wiki/Q2712646',
+    type: 'Product',
+  },
+  'google search console': {
+    wikipedia: 'https://en.wikipedia.org/wiki/Google_Search_Console',
+    wikidata: 'https://www.wikidata.org/wiki/Q18431136',
+    type: 'Product',
+  },
+  semrush: {
+    wikipedia: 'https://en.wikipedia.org/wiki/Semrush',
+    wikidata: 'https://www.wikidata.org/wiki/Q30120921',
+    type: 'Organization',
+  },
+  ahrefs: {
+    wikipedia: 'https://en.wikipedia.org/wiki/Ahrefs',
+    wikidata: 'https://www.wikidata.org/wiki/Q105701132',
+    type: 'Organization',
+  },
+  moz: {
+    wikipedia: 'https://en.wikipedia.org/wiki/Moz_(marketing_software)',
+    wikidata: 'https://www.wikidata.org/wiki/Q6913421',
+    type: 'Organization',
+  },
+  chatgpt: {
+    wikipedia: 'https://en.wikipedia.org/wiki/ChatGPT',
+    wikidata: 'https://www.wikidata.org/wiki/Q115564437',
+    type: 'Product',
+  },
+  gemini: {
+    wikipedia: 'https://en.wikipedia.org/wiki/Gemini_(language_model)',
+    wikidata: 'https://www.wikidata.org/wiki/Q123709030',
+    type: 'Product',
+  },
+  claude: {
+    wikipedia: 'https://en.wikipedia.org/wiki/Claude_(language_model)',
+    wikidata: 'https://www.wikidata.org/wiki/Q123902751',
+    type: 'Product',
+  },
+  seo: {
+    wikipedia: 'https://en.wikipedia.org/wiki/Search_engine_optimization',
+    wikidata: 'https://www.wikidata.org/wiki/Q180711',
+    type: 'Thing',
+  },
+  'search engine optimization': {
+    wikipedia: 'https://en.wikipedia.org/wiki/Search_engine_optimization',
+    wikidata: 'https://www.wikidata.org/wiki/Q180711',
+    type: 'Thing',
+  },
+  'content marketing': {
+    wikipedia: 'https://en.wikipedia.org/wiki/Content_marketing',
+    wikidata: 'https://www.wikidata.org/wiki/Q2720854',
+    type: 'Thing',
+  },
+  'digital marketing': {
+    wikipedia: 'https://en.wikipedia.org/wiki/Digital_marketing',
+    wikidata: 'https://www.wikidata.org/wiki/Q5276122',
+    type: 'Thing',
+  },
+  'higher education': {
+    wikipedia: 'https://en.wikipedia.org/wiki/Higher_education',
+    wikidata: 'https://www.wikidata.org/wiki/Q136822',
+    type: 'Thing',
+  },
+  'artificial intelligence': {
+    wikipedia: 'https://en.wikipedia.org/wiki/Artificial_intelligence',
+    wikidata: 'https://www.wikidata.org/wiki/Q11660',
+    type: 'Thing',
+  },
+  'machine learning': {
+    wikipedia: 'https://en.wikipedia.org/wiki/Machine_learning',
+    wikidata: 'https://www.wikidata.org/wiki/Q2539',
+    type: 'Thing',
+  },
+};
 
 const GENERIC_SINGLE_WORDS = new Set([
   'domestic', 'international', 'private', 'public', 'service', 'services',
@@ -191,11 +335,22 @@ async function enrichSingleEntity(
   const baseScore =
     ((totalEntities - index) / totalEntities) * 70;
 
+  // Short-circuit: if we have a known canonical entity, seed those values
+  // and skip the Wikipedia/Wikidata round-trips (Google KG still runs so the
+  // user sees KGMID coverage when available).
+  const knownKey = entity.name.toLowerCase().trim();
+  const knownMatch = KNOWN_ENTITIES[knownKey];
+
+  // ProductOntology is for concepts/products — skip for person names
+  const isLikelyPerson = /^[A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+$/.test(
+    entity.name.trim(),
+  );
+
   // Phase 1: Run Wikipedia, Google KG, and ProductOntology in parallel
   const [wikiResult, kgResult, poResult] = await Promise.allSettled([
-    findWikipediaUrl(entity.name, mainTopic),
-    findGoogleKgUrl(entity.name, apiKeys.googleKg),
-    findProductOntologyUrl(entity.name),
+    knownMatch ? Promise.resolve(knownMatch.wikipedia) : findWikipediaUrl(entity.name, mainTopic),
+    findGoogleKgUrl(entity.name, apiKeys.googleKg, mainTopic),
+    isLikelyPerson ? Promise.resolve(null) : findProductOntologyUrl(entity.name),
   ]);
 
   const wikipediaUrl =
@@ -205,15 +360,15 @@ async function enrichSingleEntity(
   const productOntologyUrl =
     poResult.status === 'fulfilled' ? poResult.value : null;
 
-  // Phase 2: Wikidata depends on Wikipedia result
-  const wikidataUrl = await findWikidataUrl(
-    entity.name,
-    wikipediaUrl,
-    mainTopic,
-  );
+  // Phase 2: Wikidata — short-circuit if known
+  const wikidataUrl = knownMatch
+    ? knownMatch.wikidata
+    : await findWikidataUrl(entity.name, wikipediaUrl, mainTopic);
 
   // Detect entity type (may use Wikidata)
-  const type = await detectEntityType(entity.name, wikidataUrl);
+  const type = knownMatch?.type
+    ? knownMatch.type
+    : await detectEntityType(entity.name, wikidataUrl);
 
   const enriched = {
     wikipediaUrl,

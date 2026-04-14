@@ -73,17 +73,30 @@ export function extractSemanticChunks(htmlContent: string): SemanticChunk[] {
 
   const $ = cheerio.load(htmlContent);
 
-  // Primary topic from title + h1
+  // Strip noise before chunking
+  $(
+    'script, style, noscript, nav, aside, header, footer, form, ' +
+      '[class*="nav"], [class*="menu"], [class*="footer"], [class*="header"], ' +
+      '[class*="sidebar"], [class*="cookie"], [class*="consent"]',
+  ).remove();
+
+  // ── Primary topic: title + h1 + meta description
   const title = $('title').text().trim();
   const h1 = $('h1').first().text().trim();
-  if (title || h1) {
+  const metaDesc =
+    $('meta[name="description"]').attr('content')?.trim() ??
+    $('meta[property="og:description"]').attr('content')?.trim() ??
+    '';
+
+  const primaryParts = [title, h1, metaDesc].filter(Boolean);
+  if (primaryParts.length) {
     chunks.push({
       type: 'primary_topic',
-      content: (title + ' ' + h1).trim(),
+      content: primaryParts.join(' — ').slice(0, 600),
     });
   }
 
-  // Sections from h2/h3 headings with their content
+  // ── Sections from h2/h3 headings with content between them
   $('h2, h3').each((_i, el) => {
     const heading = $(el);
     const headingText = heading.text().trim();
@@ -94,13 +107,10 @@ export function extractSemanticChunks(htmlContent: string): SemanticChunk[] {
 
     while (next.length) {
       const tagName = (next.prop('tagName') || '').toLowerCase();
-
-      // Stop at same-level or higher heading
       if (/^h[1-6]$/.test(tagName)) {
         const siblingLevel = parseInt(tagName.slice(1), 10);
         if (siblingLevel <= currentLevel) break;
       }
-
       const text = next.text().trim();
       if (text) sectionContent += ' ' + text;
       next = next.next();
@@ -115,18 +125,16 @@ export function extractSemanticChunks(htmlContent: string): SemanticChunk[] {
     }
   });
 
-  // Key lists (max 5)
+  // ── Key lists (max 5)
   let listCount = 0;
   $('ul, ol').each((_i, el) => {
-    if (listCount >= 5) return false; // break
-
+    if (listCount >= 5) return false;
     const items: string[] = [];
     $(el)
       .find('li')
       .each((_j, li) => {
         items.push($(li).text().trim());
       });
-
     if (items.length > 2) {
       chunks.push({
         type: 'list',
@@ -136,7 +144,7 @@ export function extractSemanticChunks(htmlContent: string): SemanticChunk[] {
     }
   });
 
-  // Existing structured data
+  // ── Existing structured data
   $('script[type="application/ld+json"]').each((_i, el) => {
     try {
       const data = JSON.parse($(el).html() || '');
@@ -151,6 +159,69 @@ export function extractSemanticChunks(htmlContent: string): SemanticChunk[] {
     }
   });
 
+  // ── Fallback: if we have few chunks (page is div-heavy with sparse headings),
+  // pull in substantial paragraphs and question-style sentences from the body.
+  const hasFewSections = chunks.filter((c) => c.type === 'section').length < 3;
+  if (hasFewSections) {
+    const root = $('article, main, [role="main"]').first();
+    const scope = root.length ? root : $('body');
+
+    const paragraphs: string[] = [];
+    scope.find('p').each((_i, el) => {
+      const text = $(el).text().replace(/\s+/g, ' ').trim();
+      if (text.length >= 80 && paragraphs.length < 6) {
+        paragraphs.push(text.slice(0, 400));
+      }
+    });
+    if (paragraphs.length) {
+      chunks.push({
+        type: 'paragraphs',
+        content: paragraphs.join(' | ').slice(0, 1200),
+      });
+    }
+
+    // Pull out any question-style sentences — strong signal for implicit user queries
+    const bodyText = scope.text().replace(/\s+/g, ' ').trim();
+    const questions = bodyText
+      .split(/(?<=[.!?])\s+/)
+      .filter((s) => s.includes('?') && s.length > 10 && s.length < 250)
+      .slice(0, 6);
+    if (questions.length) {
+      chunks.push({
+        type: 'questions_on_page',
+        content: questions.join(' | ').slice(0, 600),
+      });
+    }
+
+    // Prominent emphasized terms (h4/strong/b) — often the brand/product/feature names
+    const emphasized = new Set<string>();
+    scope.find('h4, h5, h6, strong, b').each((_i, el) => {
+      const t = $(el).text().trim();
+      if (t.length >= 2 && t.length <= 80) emphasized.add(t);
+    });
+    if (emphasized.size) {
+      chunks.push({
+        type: 'key_terms',
+        content: Array.from(emphasized).slice(0, 20).join(' | ').slice(0, 400),
+      });
+    }
+
+    // OG metadata signals
+    const ogSignals: string[] = [];
+    const ogType = $('meta[property="og:type"]').attr('content');
+    const ogSite = $('meta[property="og:site_name"]').attr('content');
+    const twTitle = $('meta[name="twitter:title"]').attr('content');
+    if (ogType) ogSignals.push(`og:type=${ogType}`);
+    if (ogSite) ogSignals.push(`og:site=${ogSite}`);
+    if (twTitle) ogSignals.push(`twitter:title=${twTitle}`);
+    if (ogSignals.length) {
+      chunks.push({
+        type: 'page_metadata',
+        content: ogSignals.join(' | ').slice(0, 300),
+      });
+    }
+  }
+
   return chunks;
 }
 
@@ -159,7 +230,7 @@ export function extractSemanticChunks(htmlContent: string): SemanticChunk[] {
 function buildFanoutPrompt(chunks: SemanticChunk[], url?: string): string {
   const urlText = url ? `URL: ${url}\n\n` : '';
 
-  return `You are analyzing a webpage for Google's AI Mode query fan-out potential. Google's AI Mode decomposes user queries into multiple sub-queries to synthesize comprehensive answers.
+  return `You are analyzing a webpage for Google's AI Mode query fan-out potential. Google's AI Mode decomposes user queries into multiple sub-queries to synthesize comprehensive answers across sources.
 
 ${urlText}SEMANTIC CHUNKS FROM PAGE:
 ${JSON.stringify(chunks, null, 2)}
@@ -168,32 +239,41 @@ Based on this content, perform the following analysis:
 
 1. IDENTIFY PRIMARY ENTITY: What is the main ontological entity or topic of this page?
 
-2. PREDICT FAN-OUT QUERIES: Generate 8-10 likely sub-queries that Google's AI might create when a user asks about this topic. Consider:
-   - Related queries (broader context)
-   - Implicit queries (unstated user needs)
-   - Comparative queries (alternatives, comparisons)
-   - Procedural queries (how-to aspects)
-   - Contextual refinements (budget, size, location specifics)
+2. PREDICT FAN-OUT QUERIES: Generate 12-15 distinct sub-queries that Google's AI Mode is likely to decompose a user's question about this topic into. Cover multiple intent types:
+   - Definitional / explanatory ("what is X", "what does X mean")
+   - Related / adjacent topics (broader or neighbouring concepts)
+   - Implicit needs (unstated problems this page solves)
+   - Comparative (X vs Y, alternatives, "is X better than Y")
+   - Procedural / how-to (steps, processes)
+   - Evaluative (cost, quality, reviews, pros/cons, ROI)
+   - Contextual / audience-specific (for-whom, when, where, budget)
+   - Trust / credibility (credentials, experience, case studies)
 
-3. SEMANTIC COVERAGE SCORE: For each predicted query, assess if the page content provides information to answer it (Yes/Partial/No).
+3. SEMANTIC COVERAGE SCORE: For each predicted query, assess if the page provides the information needed to answer it:
+   - Yes = the page directly and meaningfully answers the query
+   - Partial = the page touches the topic but lacks depth, specifics, or examples
+   - No = the page does not address this query
 
-4. FOLLOW-UP QUESTION POTENTIAL: What follow-up questions would users likely ask after reading this content?
+4. RATIONALE: For each query, add a one-sentence "Why:" note explaining (a) why a user would implicitly ask this sub-query, and (b) what specifically on the page covers (or fails to cover) it.
 
-OUTPUT FORMAT:
+5. FOLLOW-UP QUESTION POTENTIAL: List 5-8 questions users would likely ask AFTER reading this content — next-step intents, not re-phrasings.
+
+STRICT OUTPUT FORMAT (do not deviate; use plain text, one item per line, no markdown bold):
+
 PRIMARY ENTITY: [entity name]
 
 FAN-OUT QUERIES:
-• [Query 1] - Coverage: [Yes/Partial/No]
-• [Query 2] - Coverage: [Yes/Partial/No]
-...
+• [Query 1] - Coverage: [Yes/Partial/No] - Why: [one-sentence rationale]
+• [Query 2] - Coverage: [Yes/Partial/No] - Why: [one-sentence rationale]
+... (12-15 queries total)
 
 FOLLOW-UP POTENTIAL:
 • [Follow-up question 1]
 • [Follow-up question 2]
-...
+... (5-8 total)
 
-COVERAGE SCORE: [X/10 queries covered]
-RECOMMENDATIONS: [Specific content gaps to fill]`;
+COVERAGE SCORE: [X/Y queries fully covered]
+RECOMMENDATIONS: [2-4 sentences listing the highest-leverage content gaps to fill, grouped by theme]`;
 }
 
 // ─── Gemini API call ────────────────────────────────────────────────────────
@@ -208,13 +288,13 @@ async function callGeminiApi(
       temperature: 0.3,
       topK: 20,
       topP: 0.9,
-      maxOutputTokens: 2048,
+      maxOutputTokens: 4096,
     },
   };
 
   const baseUrl =
     'https://generativelanguage.googleapis.com/v1beta/models';
-  const models = ['gemini-2.0-flash-exp', 'gemini-2.0-flash'];
+  const models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
 
   for (const model of models) {
     const url = `${baseUrl}/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -232,8 +312,8 @@ async function callGeminiApi(
 
       clearTimeout(timeout);
 
-      // If the experimental model 404s, try the stable model
-      if (response.status === 404 && model === 'gemini-2.0-flash-exp') {
+      // If this model 404s (retired/unavailable), try the next fallback
+      if (response.status === 404 && model !== models[models.length - 1]) {
         continue;
       }
 
@@ -282,8 +362,8 @@ async function callGeminiApi(
         return { error: 'Gemini API request timed out (60s)' };
       }
 
-      // If it's the experimental model, try stable before giving up
-      if (model === 'gemini-2.0-flash-exp') continue;
+      // Try the next fallback model before giving up
+      if (model !== models[models.length - 1]) continue;
 
       return {
         error:
