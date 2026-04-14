@@ -71,9 +71,33 @@ export function useAnalysis() {
     partialRef.current = {}
   }, [])
 
+  const logAnalysisRun = useCallback(
+    (payload: {
+      url?: string
+      analysisType: 'full' | 'fanout_only' | 'paste'
+      keySource: 'byok' | 'free_tier'
+      entitiesFound?: number
+      processingTimeMs?: number
+    }) => {
+      fetch('/api/analyze/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => {})
+    },
+    []
+  )
+
   const analyze = useCallback(
     async (params: AnalyzeParams, apiHeaders: Record<string, string>) => {
       const startTime = Date.now()
+      const keySource: 'byok' | 'free_tier' =
+        Object.keys(apiHeaders).length > 0 ? 'byok' : 'free_tier'
+      const analysisType: 'full' | 'fanout_only' | 'paste' = params.fanoutOnly
+        ? 'fanout_only'
+        : params.mode === 'paste'
+          ? 'paste'
+          : 'full'
       setStep('extracting')
       setError(null)
       setResult(null)
@@ -101,6 +125,13 @@ export function useAnalysis() {
             if (cached) {
               setResult({ ...cached, cached: true })
               setStep('complete')
+              logAnalysisRun({
+                url: params.url,
+                analysisType,
+                keySource,
+                entitiesFound: cached.entities?.length ?? 0,
+                processingTimeMs: Date.now() - startTime,
+              })
               return
             }
           }
@@ -261,6 +292,16 @@ export function useAnalysis() {
       setResult(combined)
       setStep('complete')
 
+      // Audit log (fire-and-forget). Logs the real URL against the signed-in
+      // user's id so follow-ups are possible. Anon BYOK users get user_id=null.
+      logAnalysisRun({
+        url: params.url,
+        analysisType,
+        keySource,
+        entitiesFound: combined.entities.length,
+        processingTimeMs,
+      })
+
       // Tier 4 write-through: fire-and-forget persist of the combined
       // result to analysis_cache. URL mode only. Happens even when
       // clearCache was true so the cache stays warm.
@@ -272,7 +313,7 @@ export function useAnalysis() {
         }).catch(() => {})
       }
     },
-    []
+    [logAnalysisRun]
   )
 
   return { step, result, error, enrichProgress, analyze, reset }
