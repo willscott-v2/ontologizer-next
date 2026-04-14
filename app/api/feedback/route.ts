@@ -38,7 +38,7 @@ async function sendSlackNotification(payload: {
       type: 'header',
       text: {
         type: 'plain_text',
-        text: `${TYPE_EMOJI[payload.type] || ':memo:'} New Ontologizer feedback: ${TYPE_LABEL[payload.type] || payload.type}`,
+        text: `${TYPE_EMOJI[payload.type] || ':memo:'} New ${process.env.FEEDBACK_PROJECT_NAME || 'Ontologizer'} feedback: ${TYPE_LABEL[payload.type] || payload.type}`,
         emoji: true,
       },
     },

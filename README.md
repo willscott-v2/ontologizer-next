@@ -58,6 +58,10 @@ Run `supabase/migrations/001_initial_schema.sql` in your Supabase SQL Editor. Th
 - Analysis result cache (1-hour TTL)
 - Usage logging
 
+## Reusable Components
+
+- **[Feedback Widget](docs/feedback-widget.md)** — drop-in "Send feedback" button that posts to Slack via an incoming webhook. Designed to be copy-pasted into any Next.js App Router project; one shared webhook serves many projects via the `FEEDBACK_PROJECT_NAME` env var.
+
 ## Tech Stack
 
 - **Next.js 16** (App Router) + React 19 + TypeScript
