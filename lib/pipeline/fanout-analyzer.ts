@@ -288,7 +288,12 @@ async function callGeminiApi(
       temperature: 0.3,
       topK: 20,
       topP: 0.9,
-      maxOutputTokens: 4096,
+      // Gemini 2.5 models spend part of maxOutputTokens on internal thinking.
+      // 12288 gives room for ~2k thinking + a full 12-15 query response.
+      maxOutputTokens: 12288,
+      thinkingConfig: {
+        thinkingBudget: 2048,
+      },
     },
   };
 
