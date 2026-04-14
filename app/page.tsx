@@ -172,13 +172,7 @@ export default function Home() {
         )}
 
         {step === 'error' && error && (
-          <div className="si-error flex items-start gap-3">
-            <AlertCircle className="mt-0.5 size-5 shrink-0" />
-            <div>
-              <p className="font-semibold">Analysis failed</p>
-              <p className="mt-1 text-sm opacity-90">{error}</p>
-            </div>
-          </div>
+          <QuotaOrErrorCard error={error} />
         )}
 
         {result && (
@@ -211,6 +205,81 @@ export default function Home() {
         <FaqSection />
       </div>
     </section>
+  )
+}
+
+function QuotaOrErrorCard({ error }: { error: string }) {
+  const isQuota = /free tier limit|5\/month/i.test(error)
+  if (!isQuota) {
+    return (
+      <div className="si-error flex items-start gap-3">
+        <AlertCircle className="mt-0.5 size-5 shrink-0" />
+        <div>
+          <p className="font-semibold">Analysis failed</p>
+          <p className="mt-1 text-sm opacity-90">{error}</p>
+        </div>
+      </div>
+    )
+  }
+
+  const nextReset = new Date()
+  nextReset.setMonth(nextReset.getMonth() + 1, 1)
+  nextReset.setHours(0, 0, 0, 0)
+  const resetLabel = nextReset.toLocaleDateString(undefined, {
+    month: 'long',
+    day: 'numeric',
+  })
+
+  return (
+    <div className="rounded-xl border-2 border-[var(--orange-accent)] bg-[var(--si-slate)] p-6 text-white shadow-lg">
+      <div className="flex items-start gap-4">
+        <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-[var(--orange-accent)] text-white">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="size-6"
+          >
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+        </div>
+        <div className="flex-1">
+          <h3 className="text-xl font-extrabold leading-tight">
+            Free tier limit reached
+          </h3>
+          <p className="mt-2 text-white/90">
+            You&apos;ve used all 5 free analyses for this month. Your quota
+            resets on <strong>{resetLabel}</strong>.
+          </p>
+          <p className="mt-3 text-sm text-white/75">
+            Keep going now by adding your own API keys — stored only in your
+            browser, sent directly to the APIs, and never counted against the
+            free tier.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <a
+              href="/settings"
+              className="inline-flex items-center gap-2 rounded-lg bg-[var(--orange-accent)] px-5 py-2.5 text-sm font-extrabold uppercase tracking-wide text-white transition hover:bg-[var(--orange-dark)]"
+            >
+              Add your API keys
+            </a>
+            <a
+              href="https://github.com/willscott-v2/ontologizer-next"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/30 px-5 py-2.5 text-sm font-semibold text-white/90 transition hover:bg-white/10"
+            >
+              Self-host on GitHub
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 

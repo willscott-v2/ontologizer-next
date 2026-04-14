@@ -7,6 +7,7 @@ import {
   GoogleTagManager,
   GoogleTagManagerNoScript,
 } from "@/components/layout/GoogleTagManager";
+import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import "./globals.css";
 
 const openSans = Open_Sans({
@@ -47,6 +48,7 @@ export default function RootLayout({
         <Header />
         <main className="flex-1">{children}</main>
         <Footer />
+        <FeedbackWidget />
         <Toaster />
       </body>
     </html>

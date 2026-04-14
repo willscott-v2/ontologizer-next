@@ -301,7 +301,15 @@ async function callGeminiApi(
     'https://generativelanguage.googleapis.com/v1beta/models';
   const models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
 
-  for (const model of models) {
+  // Status codes that warrant trying the next model in the fallback chain.
+  // 503 = model overloaded, 429 = rate limit, 500/502/504 = transient infra,
+  // 404 = model retired.
+  const RETRYABLE_STATUSES = new Set([404, 429, 500, 502, 503, 504]);
+
+  let lastError = 'All Gemini model endpoints failed';
+
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
     const url = `${baseUrl}/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     const controller = new AbortController();
@@ -316,11 +324,6 @@ async function callGeminiApi(
       });
 
       clearTimeout(timeout);
-
-      // If this model 404s (retired/unavailable), try the next fallback
-      if (response.status === 404 && model !== models[models.length - 1]) {
-        continue;
-      }
 
       if (!response.ok) {
         const body = await response.text().catch(() => '');
@@ -337,11 +340,20 @@ async function callGeminiApi(
           }
         }
 
-        // Add troubleshooting hints
         if (response.status === 401 || response.status === 403) {
           errorMessage += ' (Check: API key is valid and has proper permissions)';
         } else if (response.status === 400) {
           errorMessage += ' (Check: Request format is correct, prompt is not too long)';
+        }
+
+        // Fall through to the next model on transient failures
+        const hasNextModel = i < models.length - 1;
+        if (RETRYABLE_STATUSES.has(response.status) && hasNextModel) {
+          lastError = errorMessage;
+          // Back off briefly before hitting the next model — avoid
+          // hammering a cascade of overloaded endpoints
+          await new Promise((r) => setTimeout(r, 500));
+          continue;
         }
 
         return { error: errorMessage };
@@ -364,18 +376,20 @@ async function callGeminiApi(
       clearTimeout(timeout);
 
       if (err instanceof Error && err.name === 'AbortError') {
-        return { error: 'Gemini API request timed out (60s)' };
+        lastError = 'Gemini API request timed out (60s)';
+      } else {
+        lastError = err instanceof Error ? err.message : 'Gemini API request failed';
       }
 
       // Try the next fallback model before giving up
-      if (model !== models[models.length - 1]) continue;
-
-      return {
-        error:
-          err instanceof Error ? err.message : 'Gemini API request failed',
-      };
+      const hasNextModel = i < models.length - 1;
+      if (hasNextModel) {
+        await new Promise((r) => setTimeout(r, 500));
+        continue;
+      }
+      return { error: lastError };
     }
   }
 
-  return { error: 'All Gemini model endpoints failed' };
+  return { error: lastError };
 }

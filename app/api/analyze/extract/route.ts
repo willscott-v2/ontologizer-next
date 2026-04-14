@@ -10,7 +10,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { fetchWebpage } from '@/lib/pipeline/fetcher';
 import { extractTextFromHtml } from '@/lib/pipeline/parser';
 import { extractEntities } from '@/lib/pipeline/entity-extractor';
-import { checkFreeUsage, incrementFreeUsage } from '@/lib/metering/usage-tracker';
+import {
+  checkFreeUsage,
+  incrementFreeUsage,
+  logAnalysis,
+} from '@/lib/metering/usage-tracker';
 import { createClient } from '@/lib/supabase/server';
 import type { ExtractResult } from '@/lib/types/analysis';
 
@@ -20,12 +24,16 @@ interface ExtractRequestBody {
 }
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
   try {
     const body = (await request.json()) as ExtractRequestBody;
 
     // BYOK: read OpenAI key from header
     const byokOpenaiKey = request.headers.get('X-OpenAI-Key') || undefined;
     const isByok = !!byokOpenaiKey;
+
+    let userId: string | undefined;
+    const keySource: 'byok' | 'free_tier' = isByok ? 'byok' : 'free_tier';
 
     // If no BYOK key, check free tier eligibility
     let openaiKey = byokOpenaiKey;
@@ -39,6 +47,7 @@ export async function POST(request: NextRequest) {
           { status: 401 },
         );
       }
+      userId = user.id;
 
       const usage = await checkFreeUsage(user.id);
       if (!usage.allowed) {
@@ -50,7 +59,7 @@ export async function POST(request: NextRequest) {
 
       openaiKey = process.env.OPENAI_API_KEY ?? undefined;
 
-      // Increment usage counter (fire and forget)
+      // Increment usage counter (fire and forget; no-op for unlimited domains)
       incrementFreeUsage(user.id).catch(() => {});
     }
 

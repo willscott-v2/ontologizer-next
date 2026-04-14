@@ -2,6 +2,26 @@ import { createClient } from '@supabase/supabase-js';
 
 const FREE_ANALYSES_PER_MONTH = 5;
 
+/** Email domains that bypass the free-tier cap. Set via env for flexibility;
+ *  falls back to Search Influence + webboss defaults. */
+function getUnlimitedDomains(): string[] {
+  const env = process.env.UNLIMITED_USAGE_DOMAINS;
+  if (env) {
+    return env
+      .split(',')
+      .map((d) => d.trim().toLowerCase())
+      .filter(Boolean);
+  }
+  return ['searchinfluence.com', 'webboss.com'];
+}
+
+function isUnlimitedEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const domain = email.toLowerCase().split('@')[1];
+  if (!domain) return false;
+  return getUnlimitedDomains().includes(domain);
+}
+
 function getServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -13,6 +33,7 @@ export interface UsageCheck {
   allowed: boolean;
   remaining: number;
   reason?: string;
+  unlimited?: boolean;
 }
 
 /**
@@ -27,12 +48,17 @@ export async function checkFreeUsage(userId: string): Promise<UsageCheck> {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('free_analyses_used, free_analyses_reset_at')
+    .select('email, free_analyses_used, free_analyses_reset_at')
     .eq('id', userId)
     .single();
 
   if (!profile) {
     return { allowed: false, remaining: 0, reason: 'Profile not found' };
+  }
+
+  // Unlimited-domain bypass (Search Influence staff, partner domains)
+  if (isUnlimitedEmail(profile.email)) {
+    return { allowed: true, remaining: Number.POSITIVE_INFINITY, unlimited: true };
   }
 
   // Check if the monthly counter needs resetting
@@ -65,27 +91,28 @@ export async function checkFreeUsage(userId: string): Promise<UsageCheck> {
 }
 
 /**
- * Increment the free usage counter for a user.
+ * Increment the free usage counter for a user. Skips the increment for
+ * unlimited-domain accounts so their counter stays at 0.
  */
 export async function incrementFreeUsage(userId: string): Promise<void> {
   const supabase = getServiceClient();
   if (!supabase) return;
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('email, free_analyses_used')
+    .eq('id', userId)
+    .single();
+
+  if (!profile || isUnlimitedEmail(profile.email)) return;
+
   // Try atomic increment via RPC, fall back to direct update
   const { error } = await supabase.rpc('increment_free_analyses', { user_id: userId });
   if (error) {
-    // Fallback: direct update
-    const { data } = await supabase
+    await supabase
       .from('profiles')
-      .select('free_analyses_used')
-      .eq('id', userId)
-      .single();
-    if (data) {
-      await supabase
-        .from('profiles')
-        .update({ free_analyses_used: (data.free_analyses_used ?? 0) + 1 })
-        .eq('id', userId);
-    }
+      .update({ free_analyses_used: (profile.free_analyses_used ?? 0) + 1 })
+      .eq('id', userId);
   }
 }
 
