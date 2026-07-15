@@ -97,10 +97,16 @@ test.beforeEach(async ({ page }) => {
   })
 })
 
-test('landing form is focused, responsive, and accessible', async ({ page }) => {
+test('landing form is focused, responsive, and accessible', async ({ page }, testInfo) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('AI Content Clarity Analyzer')
-  await expect(page.getByRole('button', { name: 'Analyze', exact: true })).toBeDisabled()
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('See what your page tells search and AI systems')
+  await expect(page.getByRole('button', { name: 'Analyze page', exact: true })).toBeDisabled()
+  if (testInfo.project.name === 'desktop') {
+    const analyzeButton = page.getByRole('button', { name: 'Analyze page', exact: true })
+    const analyzeBox = await analyzeButton.boundingBox()
+    expect(analyzeBox).not.toBeNull()
+    expect((analyzeBox?.y ?? Infinity) + (analyzeBox?.height ?? 0)).toBeLessThanOrEqual(900)
+  }
   await page.getByText('Advanced options').click()
   await expect(page.getByLabel('Main topic override')).toBeVisible()
   const accessibility = await new AxeBuilder({ page }).analyze()
@@ -112,20 +118,23 @@ test('anonymous visitors without API keys get the sign-in path before submission
   await page.addInitScript(() => localStorage.removeItem('ontologizer-api-keys'))
   await page.goto('/')
   await page.getByLabel('Page URL').fill('https://example.com/audit')
-  await expect(page.getByRole('button', { name: 'Analyze', exact: true })).toBeDisabled()
-  await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'add API keys' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Analyze page', exact: true })).toBeDisabled()
+  await expect(page.getByRole('link', { name: 'Sign in for 5 free' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Add API keys' })).toBeVisible()
 })
 
 test('URL analysis shows one overview and downloads the branded report', async ({ page }) => {
   await mockSuccessfulAnalysis(page)
   await page.goto('/')
   await page.getByLabel('Page URL').fill('https://example.com/audit')
-  await page.getByRole('button', { name: 'Analyze', exact: true }).click()
-  await expect(page.getByText('Primary conclusion')).toBeVisible()
+  await page.getByRole('button', { name: 'Analyze page', exact: true }).click()
+  await expect(page.getByText('What this page is about')).toBeVisible()
   await expect(page.getByText('Technical SEO Audits', { exact: true }).first()).toBeVisible()
-  await expect(page.getByText('Ready to review')).toBeVisible()
-  await expect(page.getByText('Add one sentence naming the audience and the decision this audit supports.')).toBeVisible()
+  await expect(page.getByText('Ready to review', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Add one sentence naming the audience and the decision this audit supports.' })).toBeVisible()
+  const contentOverflow = await page.locator('.content-area').evaluate((element) => getComputedStyle(element).overflowY)
+  expect(contentOverflow).not.toBe('auto')
+  expect(contentOverflow).not.toBe('scroll')
 
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: 'Download Markdown' }).click()
@@ -139,7 +148,6 @@ test('URL analysis shows one overview and downloads the branded report', async (
   expect(report).toContain('Generated schema must match visible page content')
   expect(report).toContain('Search Influence')
 
-  await page.getByRole('tab', { name: /Schema/ }).click()
   await page.getByRole('button', { name: 'Copy JSON-LD' }).click()
   await expect(page.getByRole('button', { name: 'Copied!' })).toBeVisible()
 
@@ -152,16 +160,16 @@ test('plain-text paste mode reaches the same core report contract', async ({ pag
   await page.goto('/')
   await page.getByRole('button', { name: 'Paste Content' }).click()
   await expect(page.getByLabel('Format')).toHaveValue('text')
-  await page.getByLabel('Paste page content').fill('# Technical SEO Audits\n\nAn audit identifies crawl and indexing issues.')
+  await page.getByRole('textbox', { name: 'Page content', exact: true }).fill('# Technical SEO Audits\n\nAn audit identifies crawl and indexing issues.')
   const extractRequest = page.waitForRequest('**/api/analyze/extract')
-  await page.getByRole('button', { name: 'Analyze', exact: true }).click()
+  await page.getByRole('button', { name: 'Analyze content', exact: true }).click()
   const requestBody = (await extractRequest).postDataJSON()
   expect(requestBody).toMatchObject({
     pasteFormat: 'text',
     pasteContent: expect.stringContaining('Technical SEO Audits'),
   })
   expect(requestBody.url).toBeUndefined()
-  await expect(page.getByText('Primary conclusion')).toBeVisible()
+  await expect(page.getByText('What this page is about')).toBeVisible()
 })
 
 test('optional Query Coverage is labeled as modeled', async ({ page }) => {
@@ -170,9 +178,9 @@ test('optional Query Coverage is labeled as modeled', async ({ page }) => {
   await page.getByLabel('Page URL').fill('https://example.com/audit')
   await page.getByText('Advanced options').click()
   await page.getByLabel('AI Query Coverage').check()
-  await page.getByRole('button', { name: 'Analyze', exact: true }).click()
-  await expect(page.getByText('Add a realistic audit timeline and the factors that can change it.')).toBeVisible()
-  await page.getByRole('tab', { name: 'AI Query Coverage' }).click()
+  await page.getByRole('button', { name: 'Analyze page', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Add a realistic audit timeline and the factors that can change it.' })).toBeVisible()
+  await page.getByText('Review modeled questions and evidence').click()
   await expect(page.getByText('Modeled questions based on this page, not observed Google searches.')).toBeVisible()
 })
 
@@ -180,7 +188,8 @@ test('provider failure is visible and does not expose implementation details', a
   await page.route('**/api/analyze/extract', (route) => route.fulfill({ status: 503, json: { error: 'OpenAI entity extraction is temporarily unavailable.' } }))
   await page.goto('/')
   await page.getByLabel('Page URL').fill('https://example.com/audit')
-  await page.getByRole('button', { name: 'Analyze', exact: true }).click()
+  await page.getByRole('button', { name: 'Analyze page', exact: true }).click()
   await expect(page.getByText('Analysis failed')).toBeVisible()
   await expect(page.getByText('OpenAI entity extraction is temporarily unavailable.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Try this analysis again' })).toBeVisible()
 })

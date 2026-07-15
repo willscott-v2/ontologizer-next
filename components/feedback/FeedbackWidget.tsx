@@ -188,11 +188,11 @@ export function FeedbackWidget() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-[var(--orange-accent)] px-5 py-3 text-sm font-extrabold uppercase tracking-wide text-[var(--si-dark-navy)] shadow-lg transition hover:scale-105 hover:bg-[var(--orange-light)] active:scale-95"
+        className="feedback-trigger fixed bottom-5 right-5 z-40 rounded-full bg-[var(--orange-accent)] text-[var(--si-dark-navy)] shadow-lg transition hover:scale-105 hover:bg-[var(--orange-light)] active:scale-95"
         aria-label="Send feedback"
       >
         <MessageSquare className="size-4" />
-        <span className="hidden sm:inline">Feedback</span>
+        <span className="sr-only">Feedback</span>
       </button>
       {open && <FeedbackModal onClose={() => setOpen(false)} />}
     </>

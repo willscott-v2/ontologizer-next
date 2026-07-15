@@ -22,7 +22,7 @@ import * as cheerio from 'cheerio';
 // ─── Service type detection ────────────────────────────────────────────────
 
 interface ServiceTypeMatch {
-  serviceType: string;
+  serviceType: string | null;
   sameAs: string[];
 }
 
@@ -147,7 +147,7 @@ function detectServiceType(textParts: TextParts): ServiceTypeMatch {
     }
   }
 
-  return { serviceType: 'Professional Service', sameAs: [] };
+  return { serviceType: null, sameAs: [] };
 }
 
 // ─── Audience detection ────────────────────────────────────────────────────
@@ -266,19 +266,21 @@ export function generateServiceSchema(
 
   const { serviceType, sameAs } = detectServiceType(textParts);
   const audienceMatch = detectAudience(textParts);
+  const prominentText = `${textParts.title} ${textParts.description} ${textParts.headings.slice(0, 10).map((heading) => heading.text).join(' ')}`;
+  const explicitlyTargetsAudience = /\b(?:for|serving|built for|designed for)\b.{0,80}\b(?:higher education|universit(?:y|ies)|colleges?|schools?|healthcare|hospitals?|medical practices?|e-?commerce|retailers?|b2b|enterprise|saas|law firms?|attorneys?|real estate|realtors?)\b/i.test(prominentText);
 
   // ── Service node
   const serviceNode: Record<string, unknown> = {
     '@type': 'Service',
     name: serviceName,
-    serviceType,
   };
+  if (serviceType) serviceNode.serviceType = serviceType;
 
   if (textParts.description) {
     serviceNode.description = textParts.description;
   }
 
-  if (sameAs.length > 0) {
+  if (sameAs.length > 0 && serviceType) {
     serviceNode.sameAs = sameAs;
     serviceNode.additionalType =
       'http://www.productontology.org/id/' +
@@ -289,14 +291,8 @@ export function generateServiceSchema(
     serviceNode.provider = { '@id': organizationId(url) };
   }
 
-  if (audienceMatch) {
+  if (audienceMatch && explicitlyTargetsAudience) {
     serviceNode.audience = audienceMatch.audience;
-    serviceNode.areaServed = {
-      '@type': 'AdministrativeArea',
-      name: 'United States',
-    };
-    // Keep industry-context visible as a category for Google/AI readers
-    serviceNode.category = audienceMatch.industryLabel;
   }
 
   // About entities (top 3) and mentions (next 5) as knowledge-graph anchors

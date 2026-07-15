@@ -34,11 +34,45 @@ export const queryCoverageResponseSchema = z.object({
   questions: z.array(questionSchema).min(5).max(8),
 }).strict();
 
+export function normalizeQueryCoverageModelOutput(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const source = value as Record<string, unknown>;
+  if (!Array.isArray(source.questions)) return value;
+  return {
+    primaryEntity: source.primaryEntity,
+    questions: source.questions.map((candidate) => {
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return candidate;
+      const question = candidate as Record<string, unknown>;
+      const coverageAliases: Record<string, string> = {
+        fully_covered: 'covered',
+        partially_covered: 'partial',
+        not_covered: 'missing',
+      };
+      const rawCoverage = typeof question.coverage === 'string' ? question.coverage : '';
+      const checkedScope = Array.isArray(question.checkedScope) && question.checkedScope.every((item) => typeof item === 'string')
+        ? question.checkedScope.join(' ')
+        : question.checkedScope;
+      const evidenceChunkIds = Array.isArray(question.evidenceChunkIds)
+        ? question.evidenceChunkIds.slice(0, 4)
+        : question.evidenceChunkIds;
+      const normalized: Record<string, unknown> = {
+        question: question.question,
+        intent: question.intent,
+        coverage: coverageAliases[rawCoverage] ?? question.coverage,
+        evidenceChunkIds,
+        checkedScope,
+      };
+      if (question.gapAction !== null && question.gapAction !== undefined) normalized.gapAction = question.gapAction;
+      return normalized;
+    }),
+  };
+}
+
 export function validateQueryCoverageResponse(
   value: unknown,
   chunks: SemanticChunk[],
 ): QueryCoverageAnalysis | null {
-  const validated = queryCoverageResponseSchema.safeParse(value);
+  const validated = queryCoverageResponseSchema.safeParse(normalizeQueryCoverageModelOutput(value));
   if (!validated.success) return null;
   const validChunkIds = new Set(chunks.map((chunk) => chunk.id));
   if (validated.data.questions.some((question) =>
@@ -59,6 +93,23 @@ export function validateQueryCoverageResponse(
     promptVersion: QUERY_COVERAGE_VERSION,
     disclosure: 'Modeled questions based on this page, not observed Google searches.',
   };
+}
+
+export function queryCoverageValidationIssue(
+  value: unknown,
+  chunks: SemanticChunk[],
+): string | null {
+  const validated = queryCoverageResponseSchema.safeParse(normalizeQueryCoverageModelOutput(value));
+  if (!validated.success) {
+    const issue = validated.error.issues[0];
+    return `contract_${issue.path.join('_') || 'root'}_${issue.code}`;
+  }
+  const validChunkIds = new Set(chunks.map((chunk) => chunk.id));
+  if (validated.data.questions.some((question) =>
+    question.evidenceChunkIds.some((id) => !validChunkIds.has(id)))) return 'unsupported_evidence_id';
+  const normalized = validated.data.questions.map((question) => question.question.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  if (new Set(normalized).size !== normalized.length) return 'duplicate_question';
+  return null;
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -93,6 +144,7 @@ export async function analyzeFanout(
         chunksExtracted: chunks.length,
         chunks,
         error: analysis.error,
+        usage: analysis.usage,
       };
     }
 
@@ -293,7 +345,12 @@ For each question:
 - covered: cite one or more supplied chunk IDs that directly answer it.
 - partial: cite supplied chunk IDs and provide one concise gapAction.
 - missing: use an empty evidenceChunkIds array, explain which supplied chunks were checked in checkedScope, and provide one concise gapAction.
+- For covered questions, omit gapAction entirely. Do not return null.
 - Never cite a chunk ID that was not supplied.
+- checkedScope must be one plain-text sentence, not an array or object.
+- Use only covered, partial, or missing for coverage.
+- Cite no more than four evidence chunk IDs per question.
+- Return exactly the two top-level keys shown below. Do not add summary, disclosure, or commentary.
 
 Return only JSON using this contract:
 {"primaryEntity":"...","questions":[{"question":"...","intent":"definition","coverage":"covered","evidenceChunkIds":["chunk-1"],"checkedScope":"What was checked and why the judgment follows.","gapAction":"Required only for partial or missing."}]}`;
@@ -305,7 +362,7 @@ async function callGeminiApi(
   prompt: string,
   apiKey: string,
   chunks: SemanticChunk[],
-): Promise<{ analysis: QueryCoverageAnalysis; usage?: AiUsage } | { error: string }> {
+): Promise<{ analysis: QueryCoverageAnalysis; usage?: AiUsage } | { error: string; usage?: AiUsage }> {
   // Gemini 3.x guidance: don't pin a low temperature (looping risk) and
   // prefer default thinking behavior — thinking tokens bill as output and
   // 12288 leaves room for thinking plus a full 12-15 query response.
@@ -413,11 +470,12 @@ async function callGeminiApi(
       try {
         parsed = JSON.parse(text.replace(/^```json\s*|\s*```$/g, ''));
       } catch {
-        return { error: 'Gemini returned invalid JSON for AI Query Coverage.' };
+        return { error: 'Gemini returned invalid JSON for AI Query Coverage.', usage };
       }
       const validated = validateQueryCoverageResponse(parsed, chunks);
       if (!validated) {
-        return { error: 'Gemini returned an invalid AI Query Coverage response.' };
+        const issue = queryCoverageValidationIssue(parsed, chunks) ?? 'unknown_contract_error';
+        return { error: `Gemini returned an invalid AI Query Coverage response (${issue}).`, usage };
       }
       return {
         analysis: validated,

@@ -1,7 +1,6 @@
 'use client'
 
 import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import type { AnalysisResult, ClarityStatus } from '@/lib/types/analysis'
 
 const dimensionLabels = {
@@ -12,10 +11,10 @@ const dimensionLabels = {
 } as const
 
 function StatusIcon({ status }: { status: ClarityStatus }) {
-  if (status === 'strong') return <CheckCircle2 className="size-5 text-green-700" aria-hidden="true" />
-  if (status === 'mixed') return <AlertTriangle className="size-5 text-amber-700" aria-hidden="true" />
-  if (status === 'weak') return <XCircle className="size-5 text-red-700" aria-hidden="true" />
-  return <CircleHelp className="size-5 text-slate-600" aria-hidden="true" />
+  if (status === 'strong') return <CheckCircle2 className="size-5" aria-hidden="true" />
+  if (status === 'mixed') return <AlertTriangle className="size-5" aria-hidden="true" />
+  if (status === 'weak') return <XCircle className="size-5" aria-hidden="true" />
+  return <CircleHelp className="size-5" aria-hidden="true" />
 }
 
 export function OverviewTab({ result }: { result: AnalysisResult }) {
@@ -29,7 +28,7 @@ export function OverviewTab({ result }: { result: AnalysisResult }) {
       key: recommendation.action,
       title: recommendation.action,
       detail: recommendation.observation,
-      source: 'Clarity',
+      source: 'Clarity assessment',
     })),
     ...queryGaps.map((item) => ({
       key: item.question,
@@ -41,46 +40,61 @@ export function OverviewTab({ result }: { result: AnalysisResult }) {
       key: recommendation.action,
       title: recommendation.action,
       detail: recommendation.observation,
-      source: 'Clarity',
+      source: 'Clarity assessment',
     })),
   ].slice(0, 3)
 
   return (
-    <div className="space-y-6">
-      <section>
-        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-text)]">Primary conclusion</p>
-        <h3 className="mt-1 text-xl font-semibold">{result.clarity.mainTopic}</h3>
-        <p className="mt-1 text-sm text-[var(--muted-text)]">
-          Overall clarity is <strong>{result.clarity.overallStatus}</strong> with {Math.round(result.clarity.topicConfidence * 100)}% topic confidence.
-        </p>
+    <div className="report-overview">
+      <section className="report-topic-card" aria-labelledby="report-topic-title">
+        <div>
+          <p className="report-eyebrow">What this page is about</p>
+          <h2 id="report-topic-title">{result.clarity.mainTopic}</h2>
+          <p>
+            Topic confidence: {Math.round(result.clarity.topicConfidence * 100)}%. Review the supporting evidence before changing the page.
+          </p>
+        </div>
+        <div className={`overall-status status-${result.clarity.overallStatus}`}>
+          <span>{result.clarity.overallStatus}</span>
+          <small>Overall clarity</small>
+        </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2">
-        {Object.entries(result.clarity.dimensions).map(([key, dimension]) => (
-          <div key={key} className="rounded-lg border border-[var(--border-gray)] p-4">
-            <div className="flex items-center gap-2">
-              <StatusIcon status={dimension.status} />
-              <h4 className="font-semibold">{dimensionLabels[key as keyof typeof dimensionLabels]}</h4>
-              <Badge variant="outline" className="ml-auto">{dimension.status}</Badge>
-            </div>
-            <p className="mt-2 text-sm text-[var(--muted-text)]">{dimension.summary}</p>
-          </div>
-        ))}
+      <section aria-labelledby="clarity-overview-title">
+        <div className="report-section-heading">
+          <p className="report-eyebrow">Four-part clarity review</p>
+          <h2 id="clarity-overview-title">How clearly the page communicates</h2>
+        </div>
+        <div className="dimension-grid">
+          {Object.entries(result.clarity.dimensions).map(([key, dimension]) => (
+            <article key={key} className={`dimension-card status-${dimension.status}`}>
+              <div className="dimension-card-heading">
+                <StatusIcon status={dimension.status} />
+                <h3>{dimensionLabels[key as keyof typeof dimensionLabels]}</h3>
+                <span>{dimension.status}</span>
+              </div>
+              <p>{dimension.summary}</p>
+            </article>
+          ))}
+        </div>
       </section>
 
-      <section>
-        <h3 className="text-sm font-semibold">Top actions</h3>
+      <section aria-labelledby="priority-actions-title">
+        <div className="report-section-heading report-section-heading-left">
+          <p className="report-eyebrow">Start here</p>
+          <h2 id="priority-actions-title">Priority actions</h2>
+        </div>
         {topActions.length === 0 ? (
-          <p className="mt-2 text-sm text-[var(--muted-text)]">No evidence-backed priority action was generated.</p>
+          <p className="report-empty">No evidence-backed priority action was generated.</p>
         ) : (
-          <ol className="mt-3 space-y-3">
+          <ol className="priority-action-list">
             {topActions.map((action, index) => (
-              <li key={action.key} className="flex gap-3 rounded-lg bg-[var(--background-gray)] p-4 text-sm">
-                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">{index + 1}</span>
+              <li key={action.key}>
+                <span className="priority-number">{index + 1}</span>
                 <div>
-                  <p className="font-medium">{action.title}</p>
-                  <p className="mt-1 text-[var(--muted-text)]">{action.detail}</p>
-                  <p className="mt-1 text-xs font-medium text-[var(--secondary-content)]">{action.source}</p>
+                  <h3>{action.title}</h3>
+                  <p>{action.detail}</p>
+                  <small>{action.source}</small>
                 </div>
               </li>
             ))}
@@ -88,21 +102,17 @@ export function OverviewTab({ result }: { result: AnalysisResult }) {
         )}
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2">
-        <div className="rounded-lg border border-[var(--border-gray)] p-4 text-sm">
-          <p className="font-semibold">Connected schema</p>
-          <p className="mt-1 text-[var(--muted-text)]">
-            {result.schemaArtifact.pageType.type} · {result.schemaArtifact.status === 'ready' ? 'Ready to review' : result.schemaArtifact.status}
-          </p>
+      <section className="artifact-summary-grid" aria-label="Report artifact summary">
+        <div>
+          <p className="report-eyebrow">Connected schema</p>
+          <h3>{result.schemaArtifact.pageType.type}</h3>
+          <p>{result.schemaArtifact.status === 'ready' ? 'Ready to review' : `Status: ${result.schemaArtifact.status}`}</p>
         </div>
         {result.fanoutAnalysis && (
-          <div className="rounded-lg border border-[var(--border-gray)] p-4 text-sm">
-            <p className="font-semibold">AI Query Coverage</p>
-            {query ? (
-              <p className="mt-1 text-[var(--muted-text)]">{query.summary.covered} covered, {query.summary.partial} partial, {query.summary.missing} missing</p>
-            ) : (
-              <p className="mt-1 text-[var(--muted-text)]">Unavailable: {result.fanoutAnalysis.error ?? 'No response'}</p>
-            )}
+          <div>
+            <p className="report-eyebrow">AI Query Coverage</p>
+            <h3>{query ? `${query.summary.covered} of ${query.questions.length} covered` : 'Unavailable'}</h3>
+            <p>{query ? `${query.summary.partial} partial and ${query.summary.missing} missing` : result.fanoutAnalysis.error ?? 'No response'}</p>
           </div>
         )}
       </section>

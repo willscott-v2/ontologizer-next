@@ -5,7 +5,7 @@ export function Footer() {
     <footer className="si-footer">
       <div className="si-container">
         <p>
-          Ontologizer &mdash; Entity extraction and structured data generation by{' '}
+          Ontologizer: AI content clarity and connected schema by{' '}
           <a
             href="https://www.searchinfluence.com"
             target="_blank"
@@ -23,7 +23,7 @@ export function Footer() {
             className="inline-flex items-center gap-1.5"
           >
             <Code className="h-3.5 w-3.5" />
-            Open source — clone and self-host with your own API keys
+            Open source. Clone and self-host with your own API keys
           </a>
         </p>
       </div>

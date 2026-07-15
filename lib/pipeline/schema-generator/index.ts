@@ -81,7 +81,7 @@ export interface SchemaDetection {
   evidence: string[];
 }
 
-export function detectPrimarySchemaType(textParts: TextParts): SchemaDetection {
+export function detectPrimarySchemaType(textParts: TextParts, url = ''): SchemaDetection {
   if (!textParts.htmlContent) return { type: 'WebPage', confidence: 0.4, evidence: ['No HTML supplied'] };
 
   const headingsText = textParts.headings.map((h) => h.text).join(' ');
@@ -102,6 +102,7 @@ export function detectPrimarySchemaType(textParts: TextParts): SchemaDetection {
   const educational = countMatches(combined, EDUCATIONAL_PROGRAM_PATTERNS);
   const article = countMatches(combined, ARTICLE_PATTERNS);
   const $ = cheerio.load(textParts.htmlContent);
+  const prominent = `${textParts.title} ${textParts.description} ${headingsText} ${bodySample.slice(0, 1200)}`.toLowerCase();
   const evidence: string[] = [];
   const hasDate = Boolean(
     $('time[datetime], meta[property="article:published_time"], [itemprop="datePublished"]').length,
@@ -113,8 +114,26 @@ export function detectPrimarySchemaType(textParts: TextParts): SchemaDetection {
   const hasProgramCredential = /\b(certificate|degree|diploma|credential|bachelor|master|doctorate|associate)\b/i.test(combined);
   const hasProgramDetails = /\b(curriculum|coursework|credit hours|admissions requirements|tuition|application deadline|prerequisites)\b/i.test(combined);
   const hasEducationProvider = /\b(university|college|school|institute|academy)\b/i.test(combined);
+  const ogType = $('meta[property="og:type"]').attr('content')?.toLowerCase();
+  const hasAuthor = Boolean($('meta[name="author"], meta[property="article:author"], [rel="author"], [itemprop="author"]').length);
+  const hasArticleIntent = /\b(how to|guide|tutorial|tips|blog|article)\b/i.test(prominent);
+  const hasExplicitServiceOffer = /\b(we (?:help|provide|offer)|our services?|provides? [^.]{0,60}(?:services?|audits?|consulting|installation|repair|solutions?)|request (?:an? )?(?:quote|consultation|audit)|get (?:a )?(?:quote|estimate)|book (?:a )?(?:service|consultation)|hire us)\b/i.test(prominent);
+  const isInstitutionPage = hasEducationProvider && !hasProgramCredential && !hasProgramDetails;
+  const isProfilePage = ogType === 'profile' || /\b(author|staff|team member|profile)\b/i.test(`${textParts.title} ${textParts.description}`);
+  let isHomepage = false;
+  try {
+    const parsedUrl = new URL(url);
+    isHomepage = parsedUrl.pathname === '/' || parsedUrl.pathname === '';
+  } catch {
+    isHomepage = false;
+  }
 
-  if ((article >= 1 || $('article').length > 0) && hasDate) {
+  if (isProfilePage || isInstitutionPage) {
+    evidence.push(isProfilePage ? 'Profile page evidence' : 'Institution page without one named program');
+    return { type: 'WebPage', confidence: 0.86, evidence };
+  }
+
+  if (!isHomepage && (ogType === 'article' || (hasDate && $('article').length === 1 && !hasExplicitServiceOffer && (hasAuthor || hasArticleIntent || article > 0)))) {
     evidence.push('Article or guide language', 'Visible author evidence', 'Published-date evidence');
     return { type: 'Article', confidence: 0.9, evidence };
   }
@@ -123,8 +142,7 @@ export function detectPrimarySchemaType(textParts: TextParts): SchemaDetection {
   // describe the audience rather than a real credential-bearing program.
   const directAgencySignal = /\b(we help|we work with|our clients|our services|agency|consultancy|consulting firm)\b/i.test(combined);
   const directServiceSignal = /\b(service|services|marketing|consulting|audit|audits|solution|solutions)\b/i.test(combined);
-  const explicitProviderOffer = /\b(we help|we provide|we offer|our (?:service|services))\b/i.test(textParts.body);
-  if ((agencyContext >= 1 || directAgencySignal || explicitProviderOffer) && (service >= 1 || directServiceSignal)) {
+  if ((agencyContext >= 1 || directAgencySignal || hasExplicitServiceOffer) && hasExplicitServiceOffer && (service >= 1 || directServiceSignal)) {
     evidence.push('Named service language', 'Provider or agency context');
     return { type: 'Service', confidence: Math.min(0.95, 0.72 + service * 0.03), evidence };
   }
@@ -139,7 +157,7 @@ export function detectPrimarySchemaType(textParts: TextParts): SchemaDetection {
     return { type: 'EducationalOccupationalProgram', confidence: 0.9, evidence };
   }
 
-  if (service >= 2 && /\b(we|our|provider|provides|offers|company|agency|firm|consulting)\b/i.test(combined)) {
+  if (service >= 2 && hasExplicitServiceOffer) {
     evidence.push('Named service language', 'Provider context');
     return { type: 'Service', confidence: 0.76, evidence };
   }
@@ -168,7 +186,7 @@ export function generateJsonLd(
   mainTopic: string,
   url: string,
 ): Record<string, unknown> {
-  const schemaType = detectPrimarySchemaType(textParts).type;
+  const schemaType = detectPrimarySchemaType(textParts, url).type;
 
   switch (schemaType) {
     case 'Service':
@@ -190,7 +208,7 @@ export function generateSchemaArtifact(
   mainTopic: string,
   url: string,
 ): SchemaArtifact {
-  const detection = detectPrimarySchemaType(textParts);
+  const detection = detectPrimarySchemaType(textParts, url);
   const raw = (() => {
     switch (detection.type) {
       case 'Service':

@@ -107,6 +107,7 @@ export interface GenerateResult {
   recommendations: Recommendation[];
   clarity: ClarityAssessment;
   recommendationMode: 'ai' | 'deterministic';
+  fallbackReason?: 'empty_response' | 'truncated_response' | 'invalid_json' | 'invalid_contract' | 'invalid_evidence' | 'provider_error';
   /** Present only when OpenAI generated the recommendations. */
   usage?: AiUsage;
 }

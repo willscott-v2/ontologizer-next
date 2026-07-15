@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildQueryCoveragePrompt,
   extractSemanticChunks,
+  normalizeQueryCoverageModelOutput,
+  queryCoverageValidationIssue,
   validateQueryCoverageResponse,
 } from '../fanout-analyzer';
 import type { SemanticChunk } from '@/lib/types/analysis';
@@ -37,10 +39,12 @@ describe('AI Query Coverage contract', () => {
     const badEvidence = response();
     badEvidence.questions[0].evidenceChunkIds = ['chunk-99'];
     expect(validateQueryCoverageResponse(badEvidence, chunks)).toBeNull();
+    expect(queryCoverageValidationIssue(badEvidence, chunks)).toBe('unsupported_evidence_id');
 
     const duplicate = response();
     duplicate.questions[1].question = duplicate.questions[0].question;
     expect(validateQueryCoverageResponse(duplicate, chunks)).toBeNull();
+    expect(queryCoverageValidationIssue(duplicate, chunks)).toBe('duplicate_question');
 
     const partial = response();
     partial.questions[0] = {
@@ -61,6 +65,22 @@ describe('AI Query Coverage contract', () => {
       gapAction: 'Add a concise pricing factors section with a clear qualification.',
     };
     expect(validateQueryCoverageResponse(missing, chunks)?.summary.missing).toBe(1);
+  });
+
+  it('normalizes safe provider shape variants before strict evidence validation', () => {
+    const variant = response();
+    variant.questions[0] = {
+      ...variant.questions[0],
+      coverage: 'not_covered' as 'covered',
+      evidenceChunkIds: [],
+      checkedScope: ['The title was checked.', 'Neither supplied chunk answers pricing.'] as unknown as string,
+      gapAction: 'Add a concise pricing factors section.',
+    };
+    const raw = { ...variant, summary: { covered: 4 } };
+    const normalized = normalizeQueryCoverageModelOutput(raw) as ReturnType<typeof response>;
+    expect(normalized.questions[0].coverage).toBe('missing');
+    expect(normalized.questions[0].checkedScope).toBe('The title was checked. Neither supplied chunk answers pricing.');
+    expect(validateQueryCoverageResponse(raw, chunks)?.summary.missing).toBe(1);
   });
 
   it('assigns stable chunk IDs and discloses modeled-question limits in the prompt', () => {

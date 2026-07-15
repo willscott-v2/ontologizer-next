@@ -67,7 +67,8 @@ function extractProgramDetails(
 function extractProvider(
   textParts: TextParts,
   entities: EnrichedEntity[],
-): Record<string, unknown> {
+  extractedOrganization: Record<string, unknown> | null,
+): Record<string, unknown> | null {
   const provider: Record<string, unknown> = {
     '@type': 'CollegeOrUniversity',
   };
@@ -80,11 +81,16 @@ function extractProvider(
     }
   }
 
-  if (!provider.name) {
-    provider.name =
-      extractNameFromTitle(textParts.title) ||
-      (entities.length > 0 ? entities[0].name : 'Educational Institution');
+  if (!provider.name && typeof extractedOrganization?.name === 'string' && /\b(university|college|academy|institute|school)\b/i.test(extractedOrganization.name)) {
+    provider.name = extractedOrganization.name;
   }
+
+  if (!provider.name) {
+    const titleName = extractNameFromTitle(textParts.title);
+    if (titleName && /\b(university|college|academy|institute|school)\b/i.test(titleName)) provider.name = titleName;
+  }
+
+  if (!provider.name) return null;
 
   if (textParts.description) {
     provider.description = textParts.description;
@@ -135,9 +141,11 @@ export function generateEducationalSchema(
   Object.assign(program, details);
 
   // Add provider
-  const provider = extractProvider(textParts, entities);
-  program.provider = provider;
-  schema.provider = provider;
+  const provider = extractProvider(textParts, entities, additional.organization);
+  if (provider) {
+    program.provider = provider;
+    schema.provider = provider;
+  }
 
   schema.mainEntity = program;
 

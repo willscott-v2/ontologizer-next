@@ -46,5 +46,6 @@ describe('recommendation contract', () => {
     expect(recommendations.length).toBeGreaterThan(0);
     expect(recommendations.map((item) => item.action).join(' ')).not.toMatch(/increase.*frequency/i);
     expect(recommendations.every((item) => item.observation && item.action)).toBe(true);
+    expect(recommendations.every((item) => item.evidence.length > 0)).toBe(true);
   });
 });

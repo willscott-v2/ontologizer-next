@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import type { User } from '@supabase/supabase-js';
 import { fetchWebpage, hashContent } from '@/lib/pipeline/fetcher';
 import { extractTextFromHtml } from '@/lib/pipeline/parser';
-import { extractEntities } from '@/lib/pipeline/entity-extractor';
+import { estimateTopicConfidence, extractEntities } from '@/lib/pipeline/entity-extractor';
 import { checkFreeUsage, incrementFreeUsage } from '@/lib/metering/usage-tracker';
 import { getCachedExtraction, cacheExtraction } from '@/lib/cache/extraction-cache';
 import { createClient } from '@/lib/supabase/server';
@@ -119,12 +119,15 @@ export async function POST(request: NextRequest) {
         { status: 422 },
       );
     }
+    const mainTopicConfidence = body.mainTopicOverride
+      ? 1
+      : estimateTopicConfidence(mainTopic, textParts);
 
     if (!cachedExtraction) {
       await cacheExtraction(extractionHash, {
         entities: extraction.entities,
         mainTopic,
-        mainTopicConfidence: body.mainTopicOverride ? 1 : extraction.mainTopicConfidence,
+        mainTopicConfidence,
         tokenUsage: extraction.tokenUsage,
         costUsd: extraction.costUsd,
       });
@@ -153,7 +156,7 @@ export async function POST(request: NextRequest) {
     const result: ExtractResult = {
       textParts,
       mainTopic,
-      mainTopicConfidence: body.mainTopicOverride ? 1 : extraction.mainTopicConfidence,
+      mainTopicConfidence,
       entities: extraction.entities,
       tokenUsage: cachedExtraction ? undefined : extraction.tokenUsage,
       costUsd: cachedExtraction ? undefined : extraction.costUsd,

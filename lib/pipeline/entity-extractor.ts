@@ -4,7 +4,7 @@
  */
 
 import type { RawEntity } from '../types/entities';
-import type { AiUsage } from '../types/analysis';
+import type { AiUsage, TextParts } from '../types/analysis';
 import { computeCost } from '../pricing';
 
 interface ExtractionResult {
@@ -19,6 +19,46 @@ interface ExtractionResult {
 // gpt-4o is deprecated (snapshots shut down starting 2026-10-23).
 // gpt-5.4-nano is OpenAI's recommended tier for classification/extraction.
 const OPENAI_MODEL = 'gpt-5.4-nano';
+const MAX_ENTITIES = 20;
+
+export function normalizeExtractedEntities(value: unknown): RawEntity[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const entities: RawEntity[] = [];
+  for (const candidate of value) {
+    if (typeof candidate !== 'string') continue;
+    const name = candidate.trim();
+    const key = name.toLowerCase();
+    if (!name || name.length > 120 || seen.has(key)) continue;
+    seen.add(key);
+    entities.push({ name });
+    if (entities.length === MAX_ENTITIES) break;
+  }
+  return entities;
+}
+
+function phraseSupport(text: string, topic: string): number {
+  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const normalizedText = normalize(text);
+  const normalizedTopic = normalize(topic);
+  if (!normalizedText || !normalizedTopic) return 0;
+  if (normalizedText.includes(normalizedTopic)) return 1;
+  const stopWords = new Set(['a', 'an', 'and', 'at', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'with']);
+  const words = normalizedTopic.split(' ').filter((word) => word.length > 2 && !stopWords.has(word));
+  if (!words.length) return 0;
+  return words.filter((word) => normalizedText.includes(word)).length / words.length;
+}
+
+export function estimateTopicConfidence(mainTopic: string, textParts: TextParts): number {
+  const h1 = textParts.headings.filter((heading) => heading.level === 1).map((heading) => heading.text).join(' ');
+  const score = 0.05
+    + phraseSupport(textParts.title, mainTopic) * 0.3
+    + phraseSupport(h1, mainTopic) * 0.25
+    + phraseSupport(textParts.description, mainTopic) * 0.15
+    + phraseSupport(textParts.body.slice(0, 600), mainTopic) * 0.15
+    + phraseSupport(textParts.body, mainTopic) * 0.1;
+  return Math.round(Math.min(0.95, Math.max(0.2, score)) * 100) / 100;
+}
 
 // ── OpenAI extraction ──────────────────────────────────────────────────
 
@@ -26,6 +66,9 @@ const OPENAI_PROMPT = `Analyze this web page content to extract entities and ide
 
 MAIN TOPIC RULES:
 - Extract the PRIMARY business service, product, or subject (2-6 words max)
+- Weight the page title, H1, meta description, and opening more heavily than isolated body mentions
+- On an author or profile page, use the named person or organization as the main topic
+- On a company homepage, prefer the organization or its broad offering over one product, rental option, article, or feature mentioned on the page
 - For location-specific services: include the key location in the main topic (e.g., 'O\\'Hare Limo Service', 'Denver Airport Transportation')
 - For general limo/transportation: use 'Limo Service' or 'Airport Transportation'
 - For SEO articles: use 'SEO' or 'AI Search Optimization'
@@ -132,11 +175,12 @@ export async function extractEntitiesOpenAI(
       };
     }
 
-    if (Array.isArray(parsed.entities)) {
+    const entities = normalizeExtractedEntities(parsed.entities);
+    if (entities.length > 0) {
       return {
         mainTopic: parsed.main_topic ?? '',
         mainTopicConfidence: 0.85, // OpenAI extraction is high-confidence
-        entities: parsed.entities.map((name: string) => ({ name })),
+        entities,
         tokenUsage,
         costUsd,
         usage,
@@ -193,7 +237,7 @@ export function extractEntitiesBasic(text: string): RawEntity[] {
     return true;
   });
 
-  return filtered.slice(0, 40).map((name) => ({ name }));
+  return filtered.slice(0, MAX_ENTITIES).map((name) => ({ name }));
 }
 
 // ── Main entry point ───────────────────────────────────────────────────

@@ -35,6 +35,7 @@ export const recommendationResponseSchema = z.object({
 export interface ContentAnalysis {
   recommendations: Recommendation[];
   mode: 'ai' | 'deterministic';
+  fallbackReason?: 'empty_response' | 'truncated_response' | 'invalid_json' | 'invalid_contract' | 'invalid_evidence' | 'provider_error';
   usage?: AiUsage;
 }
 
@@ -143,6 +144,7 @@ export async function analyzeContent(
 
   try {
     const { default: OpenAI } = await import('openai');
+    const { zodResponseFormat } = await import('openai/helpers/zod');
     const client = new OpenAI({ apiKey: openaiKey });
     const outline = textParts.headings.map((heading) => `${'#'.repeat(heading.level)} ${heading.text}`).join('\n');
     const evidence = Object.entries(clarity.dimensions).flatMap(([dimension, assessment]) =>
@@ -163,6 +165,9 @@ Representative page content:
 ${representativeContent(textParts)}
 
 Allowed evidence IDs:
+${JSON.stringify(evidence.map((item) => item.id))}
+
+Evidence catalog:
 ${JSON.stringify(evidence)}
 
 Return 1-8 recommendations. Every evidence value must be an allowed evidence ID. Do not recommend keyword frequency, deleting content based only on lookup confidence, or schema already present. Use this exact contract:
@@ -171,16 +176,10 @@ Return 1-8 recommendations. Every evidence value must be an allowed evidence ID.
     const response = await client.chat.completions.create({
       model: OPENAI_MODEL,
       messages: [{ role: 'user', content: prompt }],
-      max_completion_tokens: 2_000,
-      response_format: { type: 'json_object' },
+      max_completion_tokens: 4_000,
+      reasoning_effort: 'low',
+      response_format: zodResponseFormat(recommendationResponseSchema, 'content_recommendations'),
     });
-    const content = response.choices[0]?.message?.content;
-    if (!content) return { recommendations: fallback, mode: 'deterministic' };
-    const parsed = recommendationResponseSchema.safeParse(JSON.parse(content));
-    if (!parsed.success) return { recommendations: fallback, mode: 'deterministic' };
-    const validated = validateEvidenceReferences(parsed.data.recommendations, clarity);
-    if (!validated) return { recommendations: fallback, mode: 'deterministic' };
-
     let usage: AiUsage | undefined;
     if (response.usage) {
       const inputTokens = response.usage.prompt_tokens ?? 0;
@@ -193,8 +192,27 @@ Return 1-8 recommendations. Every evidence value must be an allowed evidence ID.
         costUsd: computeCost(OPENAI_MODEL, inputTokens, outputTokens) ?? 0,
       };
     }
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return {
+        recommendations: fallback,
+        mode: 'deterministic',
+        fallbackReason: response.choices[0]?.finish_reason === 'length' ? 'truncated_response' : 'empty_response',
+        usage,
+      };
+    }
+    let json: unknown;
+    try {
+      json = JSON.parse(content);
+    } catch {
+      return { recommendations: fallback, mode: 'deterministic', fallbackReason: 'invalid_json', usage };
+    }
+    const parsed = recommendationResponseSchema.safeParse(json);
+    if (!parsed.success) return { recommendations: fallback, mode: 'deterministic', fallbackReason: 'invalid_contract', usage };
+    const validated = validateEvidenceReferences(parsed.data.recommendations, clarity);
+    if (!validated) return { recommendations: fallback, mode: 'deterministic', fallbackReason: 'invalid_evidence', usage };
     return { recommendations: validated.slice(0, 8), mode: 'ai', usage };
   } catch {
-    return { recommendations: fallback, mode: 'deterministic' };
+    return { recommendations: fallback, mode: 'deterministic', fallbackReason: 'provider_error' };
   }
 }

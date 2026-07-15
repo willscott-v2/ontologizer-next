@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
       recommendations: contentAnalysis.recommendations,
       clarity,
       recommendationMode: contentAnalysis.mode,
+      fallbackReason: contentAnalysis.fallbackReason,
       usage: contentAnalysis.usage,
     };
     return NextResponse.json(result);

@@ -51,13 +51,16 @@ export function JsonLdTab({ jsonLd, schemaStatus }: JsonLdTabProps) {
           )}
         </Button>
       </div>
-      <pre
-        aria-label="Generated JSON-LD"
-        tabIndex={0}
-        className="overflow-auto rounded-lg bg-muted p-4 text-xs leading-relaxed font-mono"
-      >
-        {formatted}
-      </pre>
+      <details className="schema-code-disclosure">
+        <summary>View generated JSON-LD</summary>
+        <pre
+          aria-label="Generated JSON-LD"
+          tabIndex={0}
+          className="overflow-auto rounded-lg bg-muted p-4 text-xs leading-relaxed font-mono"
+        >
+          {formatted}
+        </pre>
+      </details>
     </div>
   )
 }

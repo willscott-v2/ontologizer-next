@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import { Toaster } from "@/components/ui/sonner";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -8,6 +9,15 @@ import {
 } from "@/components/layout/GoogleTagManager";
 import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import "./globals.css";
+
+const openSans = localFont({
+  src: "./fonts/open-sans-latin.woff2",
+  weight: "300 800",
+  style: "normal",
+  display: "swap",
+  variable: "--font-open-sans",
+  fallback: ["Arial", "sans-serif"],
+});
 
 const gscVerification = process.env.GOOGLE_SEARCH_CONSOLE_VERIFICATION;
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ontologizer.searchinfluence.com";
@@ -65,7 +75,7 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className={`${openSans.variable} h-full antialiased`}>
       <head suppressHydrationWarning>
         <GoogleTagManager />
         <script

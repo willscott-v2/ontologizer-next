@@ -1,7 +1,6 @@
 'use client'
 
-import { Clock, Database } from 'lucide-react'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Clock, Database, ExternalLink } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { ClaritySummary } from './ClaritySummary'
 import { EntitiesTab } from './EntitiesTab'
@@ -21,114 +20,126 @@ function formatMs(ms: number): string {
 }
 
 export function ResultsTabs({ result }: ResultsTabsProps) {
-  const hasFanout = !!result.fanoutAnalysis
+  const issues = [...result.schemaArtifact.errors, ...result.schemaArtifact.warnings]
+  const query = result.fanoutAnalysis?.analysis
 
   return (
-    <div className="space-y-5">
-      {/* Stats + salience bar */}
-      <div className="rounded-xl border border-[var(--border-gray)] bg-[var(--background-gray)] p-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--muted-text)]">
-              AI Content Clarity: {result.clarity.overallStatus}
-            </div>
-            <div className="text-base font-semibold text-[var(--content-text)]">
-              {result.clarity.mainTopic}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 text-sm text-[var(--muted-text)]">
-            <div className="flex items-center gap-1.5">
-              <Clock className="size-3.5" />
-              <span>{formatMs(result.processingTimeMs)}</span>
-            </div>
-            <div>
-              {result.entities.length} entit
-              {result.entities.length === 1 ? 'y' : 'ies'}
-            </div>
-            {(result.provenance.fetch === 'cached' || result.provenance.extraction === 'cached') && (
-              <div className="flex items-center gap-1.5">
-                <Database className="size-3.5" />
-                <Badge variant="secondary" className="text-xs">
-                  Cached
-                </Badge>
-              </div>
-            )}
-          </div>
+    <div className="report-flow">
+      <div className="report-meta-bar">
+        <div>
+          <span>AI Content Clarity: {result.clarity.overallStatus}</span>
+          <strong>{result.clarity.mainTopic}</strong>
+        </div>
+        <div className="report-meta-items">
+          <span><Clock className="size-4" /> {formatMs(result.processingTimeMs)}</span>
+          <span>{result.entities.length} {result.entities.length === 1 ? 'entity' : 'entities'}</span>
+          {(result.provenance.fetch === 'cached' || result.provenance.extraction === 'cached') && (
+            <span><Database className="size-4" /> Cached source data</span>
+          )}
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="overview">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="clarity">Clarity details</TabsTrigger>
-          <TabsTrigger value="entities">
-            Entities ({result.entities.length})
-          </TabsTrigger>
-          <TabsTrigger value="jsonld">Schema ({result.schemaArtifact.status})</TabsTrigger>
-          <TabsTrigger value="recommendations">
-            Recommendations
-          </TabsTrigger>
-          {hasFanout && (
-            <TabsTrigger value="fanout">AI Query Coverage</TabsTrigger>
-          )}
-        </TabsList>
+      <OverviewTab result={result} />
 
-        <TabsContent value="overview" className="mt-4">
-          <OverviewTab result={result} />
-        </TabsContent>
-
-        <TabsContent value="clarity" className="mt-4">
-          <ClaritySummary clarity={result.clarity} />
-        </TabsContent>
-
-        <TabsContent value="entities" className="mt-4">
-          <EntitiesTab entities={result.entities} />
-        </TabsContent>
-
-        <TabsContent value="jsonld" className="mt-4">
-          <div className="mb-3 rounded-lg bg-[var(--background-gray)] p-3 text-sm">
-            <span className="font-medium">{result.schemaArtifact.pageType.type}</span>
-            {' '}· {Math.round(result.schemaArtifact.pageType.confidence * 100)}% type confidence
-            {' '}· {result.schemaArtifact.status === 'ready' ? 'Ready to review' : result.schemaArtifact.status}
+      {result.fanoutAnalysis && (
+        <section className="report-section-card" aria-labelledby="query-coverage-title">
+          <div className="report-section-heading report-section-heading-left">
+            <p className="report-eyebrow">Modeled questions, not observed search data</p>
+            <h2 id="query-coverage-title">AI Query Coverage</h2>
+            <p>
+              {query
+                ? `${query.summary.covered} covered, ${query.summary.partial} partial, and ${query.summary.missing} missing across ${query.questions.length} modeled questions.`
+                : 'Query Coverage was requested but was unavailable for this run.'}
+            </p>
           </div>
-          {[...result.schemaArtifact.errors, ...result.schemaArtifact.warnings].length > 0 && (
-            <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-              <p className="font-semibold">Review before implementation</p>
-              <ul className="mt-2 list-disc space-y-2 pl-5">
-                {[...result.schemaArtifact.errors, ...result.schemaArtifact.warnings].map((issue) => (
-                  <li key={`${issue.code}-${issue.nodeId ?? ''}-${issue.property ?? ''}`}>
-                    {issue.message} {issue.action}
-                  </li>
-                ))}
-              </ul>
+          <details className="report-disclosure">
+            <summary>Review modeled questions and evidence</summary>
+            <div className="report-disclosure-content">
+              <FanoutTab fanout={result.fanoutAnalysis} />
             </div>
-          )}
-          <JsonLdTab
-            jsonLd={result.schemaArtifact.jsonLd}
-            schemaStatus={result.schemaArtifact.status}
-          />
-          <p className="mt-3 text-xs text-[var(--muted-text)]">
-            This artifact has passed Ontologizer&apos;s internal checks only. After review, paste it into the{' '}
-            <a className="font-medium text-[var(--si-navy)] underline" href="https://validator.schema.org/" target="_blank" rel="noopener noreferrer">Schema.org Validator</a>
-            {' '}and, for supported rich-result types, Google&apos;s{' '}
-            <a className="font-medium text-[var(--si-navy)] underline" href="https://search.google.com/test/rich-results" target="_blank" rel="noopener noreferrer">Rich Results Test</a>.
-          </p>
-        </TabsContent>
+          </details>
+        </section>
+      )}
 
-        <TabsContent value="recommendations" className="mt-4">
-          <RecommendationsTab
-            recommendations={result.recommendations}
-          />
-        </TabsContent>
+      <section className="report-section-card schema-review" aria-labelledby="schema-review-title">
+        <div className="schema-review-heading">
+          <div>
+            <p className="report-eyebrow">Implementation artifact</p>
+            <h2 id="schema-review-title">Connected JSON-LD</h2>
+            <p>
+              {result.schemaArtifact.pageType.type} with {Math.round(result.schemaArtifact.pageType.confidence * 100)}% page-type confidence.
+            </p>
+          </div>
+          <Badge className={`schema-status schema-status-${result.schemaArtifact.status}`}>
+            {result.schemaArtifact.status === 'ready' ? 'Ready to review' : result.schemaArtifact.status}
+          </Badge>
+        </div>
 
-        {hasFanout && result.fanoutAnalysis && (
-          <TabsContent value="fanout" className="mt-4">
-            <FanoutTab fanout={result.fanoutAnalysis} />
-          </TabsContent>
+        {issues.length > 0 && (
+          <div className="schema-issues">
+            <h3>Review before implementation</h3>
+            <ul>
+              {issues.map((issue) => (
+                <li key={`${issue.code}-${issue.nodeId ?? ''}-${issue.property ?? ''}`}>
+                  {issue.message} {issue.action}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
-      </Tabs>
+
+        <div className="schema-facts-grid">
+          <div>
+            <h3>Facts used</h3>
+            {result.schemaArtifact.factsUsed.length > 0 ? (
+              <ul>{result.schemaArtifact.factsUsed.map((fact) => <li key={fact}>{fact}</li>)}</ul>
+            ) : <p>No supported facts were available.</p>}
+          </div>
+          <div>
+            <h3>Facts omitted</h3>
+            {result.schemaArtifact.factsOmitted.length > 0 ? (
+              <ul>{result.schemaArtifact.factsOmitted.map((fact) => <li key={fact}>{fact}</li>)}</ul>
+            ) : <p>No material omissions were recorded.</p>}
+          </div>
+        </div>
+
+        <JsonLdTab
+          jsonLd={result.schemaArtifact.jsonLd}
+          schemaStatus={result.schemaArtifact.status}
+        />
+
+        <p className="validator-note">
+          Ontologizer runs internal checks only. After review, validate the artifact with{' '}
+          <a href="https://validator.schema.org/" target="_blank" rel="noopener noreferrer">
+            Schema.org Validator <ExternalLink className="size-3.5" />
+          </a>{' '}
+          and, for supported types, Google&apos;s{' '}
+          <a href="https://search.google.com/test/rich-results" target="_blank" rel="noopener noreferrer">
+            Rich Results Test <ExternalLink className="size-3.5" />
+          </a>.
+        </p>
+      </section>
+
+      <section className="report-diagnostics" aria-labelledby="report-diagnostics-title">
+        <div className="report-section-heading report-section-heading-left">
+          <p className="report-eyebrow">Supporting detail</p>
+          <h2 id="report-diagnostics-title">Evidence and diagnostics</h2>
+          <p>Open only the sections you need for review or implementation.</p>
+        </div>
+
+        <details className="report-disclosure">
+          <summary>Clarity checks and page evidence</summary>
+          <div className="report-disclosure-content"><ClaritySummary clarity={result.clarity} /></div>
+        </details>
+        <details className="report-disclosure">
+          <summary>All recommendations ({result.recommendations.length})</summary>
+          <div className="report-disclosure-content"><RecommendationsTab recommendations={result.recommendations} /></div>
+        </details>
+        <details className="report-disclosure">
+          <summary>Resolved entities ({result.entities.length})</summary>
+          <div className="report-disclosure-content"><EntitiesTab entities={result.entities} /></div>
+        </details>
+      </section>
     </div>
   )
 }

@@ -46,4 +46,5 @@ next-env.d.ts
 # local session logs (may contain PII / internal notes)
 SESSION_LOG.md
 /tasks/
+/calibration/private/
 supabase/.temp/

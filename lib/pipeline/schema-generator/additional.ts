@@ -146,19 +146,17 @@ function extractAuthor(
 
   for (const sel of metaSelectors) {
     const content = $(sel).attr('content');
-    if (content && content.trim().length > 2) {
-      return { '@type': 'Person', name: content.trim() };
+    const name = content ? cleanAuthorName(content) : null;
+    if (name) {
+      return { '@type': 'Person', name };
     }
   }
 
   // Element strategies
   const elementSelectors = [
-    '[class*="author"]',
-    '[id*="author"]',
     '[class*="byline"]',
-    '[class*="writer"]',
-    '[class*="contributor"]',
     '[rel="author"]',
+    '[itemprop="author"]',
   ];
 
   for (const sel of elementSelectors) {
@@ -183,6 +181,8 @@ function cleanAuthorName(text: string): string | null {
   const words = cleaned.split(/\s+/).slice(0, 3);
   const name = words.join(' ');
 
+  if (/\d/.test(name)) return null;
+  if (words.length < 2 || !words.every((word) => /^[A-Za-zÀ-ÖØ-öø-ÿ.'’-]+$/.test(word))) return null;
   if (name.length > 2 && name.length < 100) return name;
   return null;
 }

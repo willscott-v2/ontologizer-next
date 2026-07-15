@@ -63,6 +63,12 @@ function topicFocus(textParts: TextParts, mainTopic: string): ClarityDimension {
   const headingMatch = supportingHeadings.find((heading) => topicAppears(heading.text, mainTopic));
   if (headingMatch) {
     evidence.push({ id: 'topic-supporting-heading', source: 'heading', text: excerpt(headingMatch.text) });
+  } else if (supportingHeadings.length) {
+    evidence.push({
+      id: 'topic-supporting-headings-reviewed',
+      source: 'heading',
+      text: excerpt(supportingHeadings.slice(0, 5).map((heading) => heading.text).join(' | ')),
+    });
   }
 
   const normalizedBody = normalize(textParts.body);
@@ -72,6 +78,13 @@ function topicFocus(textParts: TextParts, mainTopic: string): ClarityDimension {
     : 0;
   const wordCount = normalizedBody.split(' ').filter(Boolean).length;
   const excessive = occurrenceCount > Math.max(12, Math.ceil(wordCount / 50));
+  if (excessive) {
+    evidence.push({
+      id: 'topic-repetition-count',
+      source: 'body',
+      text: `The exact topic phrase appears ${occurrenceCount} times in ${wordCount} readable words.`,
+    });
+  }
   const checks: ClarityCheck[] = [
     {
       id: 'topic-in-title',
@@ -111,7 +124,11 @@ function topicFocus(textParts: TextParts, mainTopic: string): ClarityDimension {
         : supportingHeadings.length
           ? 'Supporting headings use related language but do not clearly reinforce the detected topic.'
           : 'No supporting headings were available to assess.',
-      evidenceIds: headingMatch ? ['topic-supporting-heading'] : [],
+      evidenceIds: headingMatch
+        ? ['topic-supporting-heading']
+        : supportingHeadings.length
+          ? ['topic-supporting-headings-reviewed']
+          : [],
     },
     {
       id: 'topic-repetition',
@@ -120,7 +137,7 @@ function topicFocus(textParts: TextParts, mainTopic: string): ClarityDimension {
       detail: excessive
         ? `The exact topic phrase appears ${occurrenceCount} times; review the copy for forced repetition.`
         : 'No excessive exact-phrase repetition was detected.',
-      evidenceIds: [],
+      evidenceIds: excessive ? ['topic-repetition-count'] : [],
     },
   ];
 

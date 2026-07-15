@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback } from 'react'
-import { Download, AlertCircle, RotateCcw } from 'lucide-react'
+import { useCallback, useState } from 'react'
+import { Download, AlertCircle, RotateCcw, Check, FileJson2, ListChecks, ScanSearch } from 'lucide-react'
 import { useAnalysis } from '@/hooks/useAnalysis'
 import { useApiKeys } from '@/hooks/useApiKeys'
 import { useAuth } from '@/hooks/useAuth'
@@ -35,6 +35,7 @@ export default function Home() {
   const { step, result, error, enrichProgress, analyze, reset } = useAnalysis()
   const { apiHeaders, hasAnyKey, loaded: keysLoaded } = useApiKeys()
   const { user, loading: authLoading } = useAuth()
+  const [lastSubmission, setLastSubmission] = useState<AnalyzeParams | null>(null)
 
   const isAnalyzing =
     step === 'extracting' ||
@@ -44,100 +45,156 @@ export default function Home() {
 
   const handleSubmit = useCallback(
     (params: AnalyzeParams) => {
+      setLastSubmission(params)
       analyze(params, apiHeaders)
     },
     [analyze, apiHeaders]
   )
 
+  const handleNewAnalysis = useCallback(() => {
+    reset()
+    setLastSubmission(null)
+  }, [reset])
+
+  const handleRetry = useCallback(() => {
+    if (lastSubmission) analyze(lastSubmission, apiHeaders)
+  }, [analyze, apiHeaders, lastSubmission])
+
+  const sourceLabel = lastSubmission?.mode === 'url'
+    ? lastSubmission.url
+    : lastSubmission
+      ? 'Pasted page content'
+      : undefined
+
   return (
-    <section className="main-section">
-      <div className="si-container">
-        <div className="analyzer-intro">
-          <h2>Analyze one page for AI and search clarity</h2>
-          <p>
-            Enter a URL or paste content. Ontologizer explains how clearly the
-            page establishes its topic, identifies its entities, keeps related
-            ideas coherent, and structures answers. It also generates connected
-            JSON-LD with a visible review status.
-          </p>
-          <ul>
-            <li>
-              <strong>Best on one page at a time.</strong> A specific article,
-              service, or product page beats a homepage.
-            </li>
-            <li>
-              <strong>AI Query Coverage is optional.</strong> Turn it on to model
-              adjacent questions and check whether this page can answer them.
-            </li>
-            <li>
-              <strong>Your keys, your control.</strong> Bring your own API
-              keys for unlimited use, or sign in for 5 free analyses/month.
-            </li>
-          </ul>
-        </div>
+    <div className="home-page">
+      {!result ? (
+        <>
+          <section className="home-hero" aria-labelledby="home-title">
+            <div className="si-container hero-grid">
+              <div className="hero-copy">
+                <p className="hero-eyebrow">Free AI content clarity + schema analyzer</p>
+                <h1 id="home-title">See what your page tells search and AI systems.</h1>
+                <p className="hero-lede">
+                  Review topic focus, entity clarity, semantic coherence, answer structure, and connected JSON-LD in one evidence-backed report.
+                </p>
+                <ul className="hero-proof-list">
+                  <li><Check aria-hidden="true" /> Four clear findings, not an unexplained score</li>
+                  <li><Check aria-hidden="true" /> Three prioritized actions tied to page evidence</li>
+                  <li><Check aria-hidden="true" /> Reviewable schema and an ungated Markdown report</li>
+                </ul>
+              </div>
 
-        <div className="form-card">
-          <AnalyzerForm
-            onSubmit={handleSubmit}
-            isAnalyzing={isAnalyzing}
-            hasApiKeys={hasAnyKey}
-            isSignedIn={Boolean(user)}
-            isEligibilityLoading={!keysLoaded || authLoading}
-          />
-        </div>
+              <div className="analyzer-card" id="analyzer">
+                <div className="analyzer-card-heading">
+                  <div>
+                    <p>One page at a time</p>
+                    <h2>{isAnalyzing ? 'Analysis in progress' : 'Run your free analysis'}</h2>
+                  </div>
+                  {!isAnalyzing && <span>URL or pasted content</span>}
+                </div>
 
-        {isAnalyzing && (
-          <div className="form-card">
-            <ProgressIndicator step={step} enrichProgress={enrichProgress} />
-          </div>
-        )}
+                {isAnalyzing ? (
+                  <ProgressIndicator
+                    step={step}
+                    enrichProgress={enrichProgress}
+                    includeQueryCoverage={Boolean(lastSubmission?.runFanout)}
+                    sourceLabel={sourceLabel}
+                  />
+                ) : (
+                  <AnalyzerForm
+                    onSubmit={handleSubmit}
+                    isAnalyzing={isAnalyzing}
+                    hasApiKeys={hasAnyKey}
+                    isSignedIn={Boolean(user)}
+                    isEligibilityLoading={!keysLoaded || authLoading}
+                  />
+                )}
 
-        {step === 'error' && error && (
-          <QuotaOrErrorCard error={error} />
-        )}
+                {step === 'error' && error && (
+                  <QuotaOrErrorCard error={error} onRetry={handleRetry} />
+                )}
+              </div>
+            </div>
+          </section>
 
-        {result && (
-          <div className="si-results">
-            <div className="results-header">
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <h2>Results</h2>
-                <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => downloadMarkdown(result)}
-                  >
-                    <Download className="size-3.5" />
-                    Download Markdown
+          <section className="how-it-works" id="how-it-works" aria-labelledby="how-it-works-title">
+            <div className="si-container">
+              <div className="how-it-works-heading">
+                <p className="report-eyebrow">One page, one prioritized report</p>
+                <h2 id="how-it-works-title">From page content to a reviewable action plan</h2>
+              </div>
+              <div className="how-it-works-grid">
+                <article>
+                  <ScanSearch aria-hidden="true" />
+                  <span>1</span>
+                  <h3>Read the page</h3>
+                  <p>Identify the main topic, important entities, headings, and answer patterns.</p>
+                </article>
+                <article>
+                  <ListChecks aria-hidden="true" />
+                  <span>2</span>
+                  <h3>Assess clarity</h3>
+                  <p>Separate topic focus, entity identity, coherence, and answer structure.</p>
+                </article>
+                <article>
+                  <FileJson2 aria-hidden="true" />
+                  <span>3</span>
+                  <h3>Review the artifact</h3>
+                  <p>Work through three actions, then inspect the connected JSON-LD before use.</p>
+                </article>
+              </div>
+              <FaqSection />
+            </div>
+          </section>
+        </>
+      ) : (
+        <section className="results-section">
+          <div className="si-container">
+            <button type="button" onClick={handleNewAnalysis} className="back-btn">
+              <RotateCcw className="size-4" /> Analyze another page
+            </button>
+            <div className="si-results">
+              <div className="results-header">
+                <div>
+                  <p>Ontologizer report</p>
+                  <h1>AI Content Clarity Report</h1>
+                  <span>{result.source.url ?? 'Pasted page content'} · {new Date(result.analyzedAt).toLocaleDateString()}</span>
+                </div>
+                <div className="results-actions">
+                  <Button variant="secondary" onClick={() => downloadMarkdown(result)}>
+                    <Download className="size-4" /> Download Markdown
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={reset}>
-                    <RotateCcw className="size-3.5" />
-                    New analysis
+                  <Button variant="outline" onClick={handleNewAnalysis}>
+                    <RotateCcw className="size-4" /> New analysis
                   </Button>
                 </div>
               </div>
-            </div>
-            <div className="content-area">
-              <ResultsTabs result={result} />
+              <div className="content-area">
+                <ResultsTabs result={result} />
+              </div>
             </div>
           </div>
-        )}
-
-        <FaqSection />
-      </div>
-    </section>
+        </section>
+      )}
+    </div>
   )
 }
 
-function QuotaOrErrorCard({ error }: { error: string }) {
+function QuotaOrErrorCard({ error, onRetry }: { error: string; onRetry?: () => void }) {
   const isQuota = /free tier limit|5\/month/i.test(error)
   if (!isQuota) {
     return (
-      <div className="si-error flex items-start gap-3">
+      <div className="si-error analyzer-error">
         <AlertCircle className="mt-0.5 size-5 shrink-0" />
         <div>
           <p className="font-semibold">Analysis failed</p>
           <p className="mt-1 text-sm opacity-90">{error}</p>
+          {onRetry && (
+            <button type="button" onClick={onRetry} className="retry-btn">
+              Try this analysis again
+            </button>
+          )}
         </div>
       </div>
     )
@@ -325,22 +382,25 @@ function FaqSection() {
 
   return (
     <section className="faq-section">
-      <h2 className="mt-12 mb-6 text-2xl font-extrabold text-white">
+      <div className="faq-heading">
+        <p className="report-eyebrow">Questions before you run a page</p>
+        <h2>
         SEO &amp; AI-Search FAQ
-      </h2>
-      <div className="space-y-3">
+        </h2>
+      </div>
+      <div className="faq-list">
         {faqs.map((faq, i) => (
           <details
             key={i}
-            className="group rounded-lg bg-white/5 border border-white/10 text-white"
+            className="faq-item group"
           >
-            <summary className="flex cursor-pointer items-center justify-between gap-4 px-5 py-4 font-semibold text-white">
+            <summary>
               <span>{faq.q}</span>
-              <span className="text-[var(--orange-accent)] text-xl transition-transform group-open:rotate-45">
+              <span className="faq-plus">
                 +
               </span>
             </summary>
-            <div className="px-5 pb-5 text-sm leading-relaxed text-white/85">
+            <div className="faq-answer">
               {faq.a}
             </div>
           </details>
