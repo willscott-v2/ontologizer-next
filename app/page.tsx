@@ -374,18 +374,20 @@ function FaqSection() {
       q: 'What do you do with my data?',
       a: (
         <>
-          If you&apos;re signed in, we log the URLs you analyze against your
-          account — Search Influence uses this to follow up with people who
-          might want help shipping their findings. Nothing is sold, nothing
-          is shared with third parties, and if you never want the follow-up,
-          let us know via the Feedback button.
+          We log every analysis run — the URL analyzed and the results the
+          tool produced (entities, schema markup, recommendations, fan-out
+          analysis) — to improve the tool and understand how it&apos;s used.
+          If you&apos;re signed in, runs are logged against your account, and
+          Search Influence may follow up with people who might want help
+          shipping their findings. If you&apos;re using your own API keys
+          without an account, runs are logged without any identifier — we
+          can&apos;t tie them to you.
           <br />
           <br />
-          If you&apos;re using your own API keys without an account, only the
-          entity enrichment cache is touched (shared across all users, keyed
-          by entity name — Wikipedia lookups for generic terms like{' '}
-          <em>SEO</em> and <em>Higher Education</em>). No URL, no analysis
-          result, no identifier is stored against an anonymous session.
+          Your API keys are never stored on our servers — they live in your
+          browser and are sent only to the AI providers. Nothing is sold,
+          nothing is shared with third parties, and if you never want the
+          follow-up, let us know via the Feedback button.
         </>
       ),
     },

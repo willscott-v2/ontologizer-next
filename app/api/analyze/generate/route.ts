@@ -44,17 +44,18 @@ export async function POST(request: NextRequest) {
     const jsonLd = generateJsonLd(enrichedEntities, textParts, mainTopic, url || '');
 
     // Run SEO analysis and salience scoring in parallel
-    const [recommendations, salience] = await Promise.all([
+    const [contentAnalysis, salience] = await Promise.all([
       analyzeContent(enrichedEntities, textParts, mainTopic, jsonLd, openaiKey),
       Promise.resolve(calculateSalience(enrichedEntities, textParts, mainTopic)),
     ]);
 
     const result: GenerateResult = {
       jsonLd,
-      recommendations,
+      recommendations: contentAnalysis.recommendations,
       topicalSalience: salience.score,
       salienceTips: salience.tips,
       irrelevantEntities: salience.irrelevantEntities,
+      usage: contentAnalysis.usage,
     };
 
     return NextResponse.json(result);

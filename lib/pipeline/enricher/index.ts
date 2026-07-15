@@ -312,9 +312,12 @@ async function detectEntityType(
     }
   }
 
-  // Fallback: guess from name patterns
-  if (/^[A-Z][a-z]+ [A-Z][a-z]+$/.test(name)) return 'Person';
-  if (/university|school/i.test(name)) return 'Organization';
+  // Fallback: guess from name patterns. Two capitalized words is NOT
+  // evidence of a person ("Google Ads", "New Orleans", "Digital
+  // Advertising" all match) — Person requires Wikidata Q5 or a
+  // KNOWN_ENTITIES entry, otherwise wrong @type:Person lands in the
+  // generated JSON-LD.
+  if (/university|school|college|institute/i.test(name)) return 'Organization';
 
   return 'Thing';
 }

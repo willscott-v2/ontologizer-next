@@ -151,6 +151,7 @@ export async function POST(request: NextRequest) {
       costUsd: extraction.costUsd,
       cached: false,
       contentHash,
+      usage: extraction.usage,
     };
 
     return NextResponse.json(result);

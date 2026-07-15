@@ -8,7 +8,8 @@
  */
 
 import * as cheerio from 'cheerio';
-import type { SemanticChunk, FanoutResult } from '../types/analysis';
+import type { SemanticChunk, FanoutResult, AiUsage } from '../types/analysis';
+import { computeCost } from '../pricing';
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -36,19 +37,20 @@ export async function analyzeFanout(
   try {
     const analysis = await callGeminiApi(prompt, geminiKey);
 
-    if (typeof analysis === 'object' && analysis !== null && 'error' in analysis) {
+    if ('error' in analysis) {
       return {
         analysis: null,
         chunksExtracted: chunks.length,
         chunks,
-        error: (analysis as { error: string }).error,
+        error: analysis.error,
       };
     }
 
     return {
-      analysis: analysis as string,
+      analysis: analysis.text,
       chunksExtracted: chunks.length,
       chunks,
+      usage: analysis.usage,
     };
   } catch (err) {
     return {
@@ -281,25 +283,22 @@ RECOMMENDATIONS: [2-4 sentences listing the highest-leverage content gaps to fil
 async function callGeminiApi(
   prompt: string,
   apiKey: string,
-): Promise<string | { error: string }> {
+): Promise<{ text: string; usage?: AiUsage } | { error: string }> {
+  // Gemini 3.x guidance: don't pin a low temperature (looping risk) and
+  // prefer default thinking behavior — thinking tokens bill as output and
+  // 12288 leaves room for thinking plus a full 12-15 query response.
   const requestData = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: {
-      temperature: 0.3,
-      topK: 20,
-      topP: 0.9,
-      // Gemini 2.5 models spend part of maxOutputTokens on internal thinking.
-      // 12288 gives room for ~2k thinking + a full 12-15 query response.
       maxOutputTokens: 12288,
-      thinkingConfig: {
-        thinkingBudget: 2048,
-      },
     },
   };
 
   const baseUrl =
     'https://generativelanguage.googleapis.com/v1beta/models';
-  const models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'];
+  // Gemini 2.5 models all shut down 2026-10-16. Chain is cost-ascending:
+  // 3.1-flash-lite is GA and positioned as frontier-class at low cost.
+  const models = ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'];
 
   // Status codes that warrant trying the next model in the fallback chain.
   // 503 = model overloaded, 429 = rate limit, 500/502/504 = transient infra,
@@ -371,7 +370,23 @@ async function callGeminiApi(
         };
       }
 
-      return text;
+      let usage: AiUsage | undefined;
+      const meta = data?.usageMetadata;
+      if (meta) {
+        const inputTokens = meta.promptTokenCount ?? 0;
+        // Thinking tokens bill at the output rate
+        const outputTokens =
+          (meta.candidatesTokenCount ?? 0) + (meta.thoughtsTokenCount ?? 0);
+        usage = {
+          provider: 'gemini',
+          model,
+          inputTokens,
+          outputTokens,
+          costUsd: computeCost(model, inputTokens, outputTokens) ?? 0,
+        };
+      }
+
+      return { text, usage };
     } catch (err) {
       clearTimeout(timeout);
 

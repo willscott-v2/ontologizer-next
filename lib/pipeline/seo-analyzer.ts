@@ -5,11 +5,22 @@
  */
 
 import type { EnrichedEntity } from '../types/entities';
-import type { TextParts, Recommendation } from '../types/analysis';
+import type { TextParts, Recommendation, AiUsage } from '../types/analysis';
+import { computeCost } from '../pricing';
+
+// gpt-4o is deprecated (snapshots shut down starting 2026-10-23).
+// gpt-5.4-mini for prose-quality recommendations at ~60% less cost.
+const OPENAI_MODEL = 'gpt-5.4-mini';
+
+export interface ContentAnalysis {
+  recommendations: Recommendation[];
+  /** Present only when OpenAI produced the recommendations. */
+  usage?: AiUsage;
+}
 
 /**
  * Analyze content and generate SEO recommendations.
- * Uses OpenAI GPT-4o when a key is provided, otherwise falls back to
+ * Uses OpenAI when a key is provided, otherwise falls back to
  * basic heuristic recommendations.
  */
 export async function analyzeContent(
@@ -18,7 +29,7 @@ export async function analyzeContent(
   mainTopic: string,
   jsonLd?: Record<string, unknown>,
   openaiKey?: string,
-): Promise<Recommendation[]> {
+): Promise<ContentAnalysis> {
   if (openaiKey) {
     try {
       return await generateOpenAiRecommendations(
@@ -32,7 +43,7 @@ export async function analyzeContent(
     }
   }
 
-  return generateBasicRecommendations(entities, textParts);
+  return { recommendations: generateBasicRecommendations(entities, textParts) };
 }
 
 // ─── OpenAI-powered recommendations ────────────────────────────────────────
@@ -42,7 +53,7 @@ async function generateOpenAiRecommendations(
   textParts: TextParts,
   jsonLd: Record<string, unknown> | undefined,
   apiKey: string,
-): Promise<Recommendation[]> {
+): Promise<ContentAnalysis> {
   // Use dynamic import so the openai package is only loaded when needed
   const { default: OpenAI } = await import('openai');
   const client = new OpenAI({ apiKey });
@@ -78,26 +89,47 @@ Example:
 
 Return *only* the raw JSON object, without any surrounding text, formatting, or explanations.`;
 
+  // gpt-5-series models reject max_tokens and non-default temperature.
   const response = await client.chat.completions.create({
-    model: 'gpt-4o',
+    model: OPENAI_MODEL,
     messages: [{ role: 'user', content: prompt }],
-    max_tokens: 1000,
-    temperature: 0.3,
+    max_completion_tokens: 2000,
     response_format: { type: 'json_object' },
   });
 
+  let usage: AiUsage | undefined;
+  if (response.usage) {
+    const inputTokens = response.usage.prompt_tokens ?? 0;
+    const outputTokens = response.usage.completion_tokens ?? 0;
+    usage = {
+      provider: 'openai',
+      model: OPENAI_MODEL,
+      inputTokens,
+      outputTokens,
+      costUsd: computeCost(OPENAI_MODEL, inputTokens, outputTokens) ?? 0,
+    };
+  }
+
   const content = response.choices[0]?.message?.content;
-  if (!content) return generateBasicRecommendations(entities, textParts);
+  if (!content) {
+    return {
+      recommendations: generateBasicRecommendations(entities, textParts),
+      usage,
+    };
+  }
 
   const parsed = JSON.parse(content);
   if (
     parsed.recommendations &&
     Array.isArray(parsed.recommendations)
   ) {
-    return parsed.recommendations as Recommendation[];
+    return { recommendations: parsed.recommendations as Recommendation[], usage };
   }
 
-  return generateBasicRecommendations(entities, textParts);
+  return {
+    recommendations: generateBasicRecommendations(entities, textParts),
+    usage,
+  };
 }
 
 function buildSchemaContext(

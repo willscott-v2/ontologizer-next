@@ -4,6 +4,8 @@
  */
 
 import type { RawEntity } from '../types/entities';
+import type { AiUsage } from '../types/analysis';
+import { computeCost } from '../pricing';
 
 interface ExtractionResult {
   mainTopic: string;
@@ -11,7 +13,12 @@ interface ExtractionResult {
   entities: RawEntity[];
   tokenUsage?: number;
   costUsd?: number;
+  usage?: AiUsage;
 }
+
+// gpt-4o is deprecated (snapshots shut down starting 2026-10-23).
+// gpt-5.4-nano is OpenAI's recommended tier for classification/extraction.
+const OPENAI_MODEL = 'gpt-5.4-nano';
 
 // ── OpenAI extraction ──────────────────────────────────────────────────
 
@@ -72,11 +79,11 @@ export async function extractEntitiesOpenAI(
   // Limit content to 8000 chars for reasonable token usage
   const contentForAnalysis = text.slice(0, 8000);
 
+  // gpt-5-series models reject max_tokens and non-default temperature.
   const requestBody = {
-    model: 'gpt-4o',
+    model: OPENAI_MODEL,
     messages: [{ role: 'user', content: OPENAI_PROMPT + contentForAnalysis }],
-    max_tokens: 1000,
-    temperature: 0.3,
+    max_completion_tokens: 2000,
     response_format: { type: 'json_object' },
   };
 
@@ -110,12 +117,19 @@ export async function extractEntitiesOpenAI(
     // Track token usage
     let tokenUsage: number | undefined;
     let costUsd: number | undefined;
+    let usage: AiUsage | undefined;
     if (data.usage) {
       const promptTokens = data.usage.prompt_tokens ?? 0;
       const completionTokens = data.usage.completion_tokens ?? 0;
       tokenUsage = data.usage.total_tokens ?? promptTokens + completionTokens;
-      // GPT-4o pricing: $0.000005/input, $0.000015/output
-      costUsd = promptTokens * 0.000005 + completionTokens * 0.000015;
+      costUsd = computeCost(OPENAI_MODEL, promptTokens, completionTokens) ?? 0;
+      usage = {
+        provider: 'openai',
+        model: OPENAI_MODEL,
+        inputTokens: promptTokens,
+        outputTokens: completionTokens,
+        costUsd,
+      };
     }
 
     if (Array.isArray(parsed.entities)) {
@@ -125,6 +139,7 @@ export async function extractEntitiesOpenAI(
         entities: parsed.entities.map((name: string) => ({ name })),
         tokenUsage,
         costUsd,
+        usage,
       };
     }
 

@@ -15,7 +15,7 @@ function getUnlimitedDomains(): string[] {
   return ['searchinfluence.com', 'webboss.com'];
 }
 
-function isUnlimitedEmail(email: string | null | undefined): boolean {
+export function isUnlimitedEmail(email: string | null | undefined): boolean {
   if (!email) return false;
   const domain = email.toLowerCase().split('@')[1];
   if (!domain) return false;
@@ -117,7 +117,9 @@ export async function incrementFreeUsage(userId: string): Promise<void> {
 }
 
 /**
- * Log an analysis for auditing/analytics.
+ * Log an analysis run for auditing/analytics. Covers completed runs
+ * (with result payload + token/cost totals) and failed runs (with the
+ * step and message that killed the pipeline).
  */
 export async function logAnalysis(params: {
   userId?: string;
@@ -126,6 +128,17 @@ export async function logAnalysis(params: {
   keySource: 'byok' | 'free_tier';
   entitiesFound?: number;
   processingTimeMs?: number;
+  status?: 'complete' | 'failed';
+  errorStep?: 'extract' | 'enrich' | 'generate';
+  errorMessage?: string;
+  result?: Record<string, unknown>;
+  openaiInputTokens?: number;
+  openaiOutputTokens?: number;
+  openaiCostUsd?: number;
+  geminiInputTokens?: number;
+  geminiOutputTokens?: number;
+  geminiCostUsd?: number;
+  totalCostUsd?: number;
 }): Promise<void> {
   const supabase = getServiceClient();
   if (!supabase) return;
@@ -137,5 +150,16 @@ export async function logAnalysis(params: {
     key_source: params.keySource,
     entities_found: params.entitiesFound ?? 0,
     processing_time_ms: params.processingTimeMs ?? 0,
+    status: params.status ?? 'complete',
+    error_step: params.errorStep ?? null,
+    error_message: params.errorMessage ?? null,
+    result: params.result ?? null,
+    openai_input_tokens: params.openaiInputTokens ?? 0,
+    openai_output_tokens: params.openaiOutputTokens ?? 0,
+    openai_cost_usd: params.openaiCostUsd ?? 0,
+    gemini_input_tokens: params.geminiInputTokens ?? 0,
+    gemini_output_tokens: params.geminiOutputTokens ?? 0,
+    gemini_cost_usd: params.geminiCostUsd ?? 0,
+    total_cost_usd: params.totalCostUsd ?? 0,
   });
 }

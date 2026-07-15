@@ -9,10 +9,47 @@ import type {
   EnrichResult,
   GenerateResult,
   FanoutResult,
+  AiUsage,
 } from '@/lib/types/analysis'
 import type { EnrichedEntity, RawEntity } from '@/lib/types/entities'
 
 const ENRICH_BATCH_SIZE = 5
+
+interface UsageTotals {
+  openaiInputTokens: number
+  openaiOutputTokens: number
+  openaiCostUsd: number
+  geminiInputTokens: number
+  geminiOutputTokens: number
+  geminiCostUsd: number
+  totalCostUsd: number
+}
+
+function sumUsage(usages: Array<AiUsage | undefined>): UsageTotals {
+  const totals: UsageTotals = {
+    openaiInputTokens: 0,
+    openaiOutputTokens: 0,
+    openaiCostUsd: 0,
+    geminiInputTokens: 0,
+    geminiOutputTokens: 0,
+    geminiCostUsd: 0,
+    totalCostUsd: 0,
+  }
+  for (const u of usages) {
+    if (!u) continue
+    if (u.provider === 'openai') {
+      totals.openaiInputTokens += u.inputTokens
+      totals.openaiOutputTokens += u.outputTokens
+      totals.openaiCostUsd += u.costUsd
+    } else {
+      totals.geminiInputTokens += u.inputTokens
+      totals.geminiOutputTokens += u.outputTokens
+      totals.geminiCostUsd += u.costUsd
+    }
+    totals.totalCostUsd += u.costUsd
+  }
+  return totals
+}
 
 interface EnrichProgress {
   current: number
@@ -78,7 +115,11 @@ export function useAnalysis() {
       keySource: 'byok' | 'free_tier'
       entitiesFound?: number
       processingTimeMs?: number
-    }) => {
+      status?: 'complete' | 'failed'
+      errorStep?: 'extract' | 'enrich' | 'generate'
+      errorMessage?: string
+      result?: AnalysisResult
+    } & Partial<UsageTotals>) => {
       fetch('/api/analyze/log', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -125,12 +166,15 @@ export function useAnalysis() {
             if (cached) {
               setResult({ ...cached, cached: true })
               setStep('complete')
+              // Cache hit spent no tokens — usage fields default to zero
               logAnalysisRun({
                 url: params.url,
                 analysisType,
                 keySource,
                 entitiesFound: cached.entities?.length ?? 0,
                 processingTimeMs: Date.now() - startTime,
+                status: 'complete',
+                result: { ...cached, cached: true },
               })
               return
             }
@@ -154,9 +198,18 @@ export function useAnalysis() {
         )
       } catch (err) {
         setStep('error')
-        setError(
+        const message =
           err instanceof Error ? err.message : 'Entity extraction failed'
-        )
+        setError(message)
+        logAnalysisRun({
+          url: params.url || undefined,
+          analysisType,
+          keySource,
+          processingTimeMs: Date.now() - startTime,
+          status: 'failed',
+          errorStep: 'extract',
+          errorMessage: message,
+        })
         return
       }
 
@@ -189,9 +242,20 @@ export function useAnalysis() {
         partialRef.current.entities = enrichedEntities
       } catch (err) {
         setStep('error')
-        setError(
+        const message =
           err instanceof Error ? err.message : 'Entity enrichment failed'
-        )
+        setError(message)
+        logAnalysisRun({
+          url: params.url || undefined,
+          analysisType,
+          keySource,
+          entitiesFound: enrichedEntities.length,
+          processingTimeMs: Date.now() - startTime,
+          status: 'failed',
+          errorStep: 'enrich',
+          errorMessage: message,
+          ...sumUsage([extractResult.usage]),
+        })
         // Preserve partial entities
         if (enrichedEntities.length > 0) {
           setResult({
@@ -232,11 +296,20 @@ export function useAnalysis() {
           }
         } catch (err) {
           setStep('error')
-          setError(
-            err instanceof Error
-              ? err.message
-              : 'Schema generation failed'
-          )
+          const message =
+            err instanceof Error ? err.message : 'Schema generation failed'
+          setError(message)
+          logAnalysisRun({
+            url: params.url || undefined,
+            analysisType,
+            keySource,
+            entitiesFound: enrichedEntities.length,
+            processingTimeMs: Date.now() - startTime,
+            status: 'failed',
+            errorStep: 'generate',
+            errorMessage: message,
+            ...sumUsage([extractResult.usage]),
+          })
           // Preserve partial results
           setResult({
             entities: enrichedEntities,
@@ -295,11 +368,18 @@ export function useAnalysis() {
       // Audit log (fire-and-forget). Logs the real URL against the signed-in
       // user's id so follow-ups are possible. Anon BYOK users get user_id=null.
       logAnalysisRun({
-        url: params.url,
+        url: params.url || undefined,
         analysisType,
         keySource,
         entitiesFound: combined.entities.length,
         processingTimeMs,
+        status: 'complete',
+        result: combined,
+        ...sumUsage([
+          extractResult.usage,
+          generateResult?.usage,
+          fanoutResult?.usage,
+        ]),
       })
 
       // Tier 4 write-through: fire-and-forget persist of the combined

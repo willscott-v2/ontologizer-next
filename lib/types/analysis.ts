@@ -29,6 +29,16 @@ export interface SemanticChunk {
   content: string;
 }
 
+// Token usage + cost for a single AI call
+export interface AiUsage {
+  provider: 'openai' | 'gemini';
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  /** USD. 0 when the model is unknown to the pricing table. */
+  costUsd: number;
+}
+
 // Step 1: Extract response
 export interface ExtractResult {
   textParts: TextParts;
@@ -40,6 +50,8 @@ export interface ExtractResult {
   cached?: boolean;
   /** md5 of cleaned page text. Used as key for extraction + fanout caches. */
   contentHash?: string;
+  /** Present only when a live OpenAI call happened (cache miss). */
+  usage?: AiUsage;
 }
 
 // Step 2: Enrich response (per batch)
@@ -55,6 +67,8 @@ export interface GenerateResult {
   topicalSalience: number;
   salienceTips: string[];
   irrelevantEntities: string[];
+  /** Present only when OpenAI generated the recommendations. */
+  usage?: AiUsage;
 }
 
 export interface Recommendation {
@@ -68,6 +82,8 @@ export interface FanoutResult {
   chunksExtracted: number;
   chunks?: SemanticChunk[] | string[];
   error?: string;
+  /** Present only when a live Gemini call happened (cache miss, no error). */
+  usage?: AiUsage;
 }
 
 // Combined full analysis

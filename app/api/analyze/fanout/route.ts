@@ -79,9 +79,11 @@ export async function POST(request: NextRequest) {
     const result = await analyzeFanout(htmlContent, url, geminiKey);
 
     // Write to cache only when the call actually produced an analysis.
-    // Don't poison the cache with transient errors.
+    // Don't poison the cache with transient errors. Usage is stripped so a
+    // later cache hit doesn't re-report tokens that were never spent.
     if (result.analysis && !result.error) {
-      cacheFanout(contentHash, result).catch(() => {});
+      const { usage: _usage, ...cacheable } = result;
+      cacheFanout(contentHash, cacheable).catch(() => {});
     }
 
     return NextResponse.json(result);
