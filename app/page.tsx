@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { Download, AlertCircle, RotateCcw, Check, FileJson2, ListChecks, ScanSearch } from 'lucide-react'
+import { Download, AlertCircle, RotateCcw } from 'lucide-react'
 import { useAnalysis } from '@/hooks/useAnalysis'
 import { useApiKeys } from '@/hooks/useApiKeys'
 import { useAuth } from '@/hooks/useAuth'
@@ -79,9 +79,9 @@ export default function Home() {
                   Review topic focus, entity clarity, semantic coherence, answer structure, and connected JSON-LD in one evidence-backed report.
                 </p>
                 <ul className="hero-proof-list">
-                  <li><Check aria-hidden="true" /> Four clear findings, not an unexplained score</li>
-                  <li><Check aria-hidden="true" /> Three prioritized actions tied to page evidence</li>
-                  <li><Check aria-hidden="true" /> Reviewable schema and an ungated Markdown report</li>
+                  <li>Four clear findings, not an unexplained score</li>
+                  <li>Three prioritized actions tied to page evidence</li>
+                  <li>Reviewable schema and an ungated Markdown report</li>
                 </ul>
               </div>
 
@@ -126,20 +126,17 @@ export default function Home() {
               </div>
               <div className="how-it-works-grid">
                 <article>
-                  <ScanSearch aria-hidden="true" />
-                  <span>1</span>
+                  <span>01</span>
                   <h3>Read the page</h3>
                   <p>Identify the main topic, important entities, headings, and answer patterns.</p>
                 </article>
                 <article>
-                  <ListChecks aria-hidden="true" />
-                  <span>2</span>
+                  <span>02</span>
                   <h3>Assess clarity</h3>
                   <p>Separate topic focus, entity identity, coherence, and answer structure.</p>
                 </article>
                 <article>
-                  <FileJson2 aria-hidden="true" />
-                  <span>3</span>
+                  <span>03</span>
                   <h3>Review the artifact</h3>
                   <p>Work through three actions, then inspect the connected JSON-LD before use.</p>
                 </article>
@@ -209,53 +206,26 @@ function QuotaOrErrorCard({ error, onRetry }: { error: string; onRetry?: () => v
   })
 
   return (
-    <div className="rounded-xl border-2 border-[var(--orange-accent)] bg-[var(--si-slate)] p-6 text-white shadow-lg">
-      <div className="flex items-start gap-4">
-        <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-[var(--orange-accent)] text-[var(--si-dark-navy)]">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="size-6"
-          >
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-        </div>
-        <div className="flex-1">
-          <h3 className="text-xl font-extrabold leading-tight">
-            Free tier limit reached
-          </h3>
-          <p className="mt-2 text-white/90">
-            You&apos;ve used all 5 free analyses for this month. Your quota
-            resets on <strong>{resetLabel}</strong>.
-          </p>
-          <p className="mt-3 text-sm text-white/75">
-            Keep going by adding your own API keys. They are stored in your
-            browser, forwarded for the requested provider calls, and not
-            counted against the free tier.
-          </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <a
-              href="/settings"
-              className="inline-flex items-center gap-2 rounded-lg bg-[var(--orange-accent)] px-5 py-2.5 text-sm font-extrabold uppercase tracking-wide text-[var(--si-dark-navy)] transition hover:bg-[var(--orange-light)]"
-            >
-              Add your API keys
-            </a>
-            <a
-              href="https://github.com/willscott-v2/ontologizer-next"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-lg border border-white/30 px-5 py-2.5 text-sm font-semibold text-white/90 transition hover:bg-white/10"
-            >
-              Self-host on GitHub
-            </a>
-          </div>
-        </div>
+    <div className="quota-message">
+      <h3>Free tier limit reached</h3>
+      <p>
+        You&apos;ve used all 5 free analyses for this month. Your quota
+        resets on <strong>{resetLabel}</strong>.
+      </p>
+      <p>
+        Add your own API keys to continue. They stay in your browser, are
+        forwarded only for the requested provider calls, and do not count
+        against the free tier.
+      </p>
+      <div className="quota-actions">
+        <a href="/settings">Add your API keys</a>
+        <a
+          href="https://github.com/willscott-v2/ontologizer-next"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Self-host on GitHub
+        </a>
       </div>
     </div>
   )

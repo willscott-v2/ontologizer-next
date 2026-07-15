@@ -1,6 +1,5 @@
 'use client'
 
-import { Badge } from '@/components/ui/badge'
 import type { ClarityAssessment, ClarityStatus } from '@/lib/types/analysis'
 
 const labels = {
@@ -11,47 +10,47 @@ const labels = {
 } as const
 
 function statusClass(status: ClarityStatus): string {
-  if (status === 'strong') return 'bg-green-100 text-green-800'
-  if (status === 'mixed') return 'bg-amber-100 text-amber-800'
-  if (status === 'weak') return 'bg-red-100 text-red-800'
-  return 'bg-slate-100 text-slate-700'
+  if (status === 'strong') return 'status-strong'
+  if (status === 'mixed') return 'status-mixed'
+  if (status === 'weak') return 'status-weak'
+  return 'status-unavailable'
 }
 
 export function ClaritySummary({ clarity }: { clarity: ClarityAssessment }) {
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-2">
+    <div className="clarity-detail">
+      <div className="clarity-detail-grid">
         {Object.entries(clarity.dimensions).map(([key, dimension]) => (
-          <div key={key} className="rounded-lg border border-[var(--border-gray)] p-4">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="font-semibold text-[var(--content-text)]">
+          <section key={key} className="clarity-detail-section">
+            <div className="clarity-detail-heading">
+              <h3>
                 {labels[key as keyof typeof labels]}
               </h3>
-              <Badge className={statusClass(dimension.status)}>{dimension.status}</Badge>
+              <span className={statusClass(dimension.status)}>{dimension.status}</span>
             </div>
-            <p className="mt-2 text-sm text-[var(--muted-text)]">{dimension.summary}</p>
-            <details className="mt-3 text-sm">
-              <summary className="cursor-pointer font-medium">Why this status</summary>
-              <ul className="mt-2 space-y-2">
+            <p>{dimension.summary}</p>
+            <details className="clarity-checks">
+              <summary>Why this status</summary>
+              <ul>
                 {dimension.checks.map((check) => (
-                  <li key={check.id} className="rounded-md bg-[var(--background-gray)] p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium">{check.label}</span>
-                      <span className="text-xs uppercase text-[var(--muted-text)]">{check.status}</span>
+                  <li key={check.id}>
+                    <div>
+                      <strong>{check.label}</strong>
+                      <span>{check.status}</span>
                     </div>
-                    <p className="mt-1 text-[var(--muted-text)]">{check.detail}</p>
+                    <p>{check.detail}</p>
                   </li>
                 ))}
               </ul>
             </details>
-          </div>
+          </section>
         ))}
       </div>
 
       {clarity.degradedSteps.length > 0 && (
-        <div className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">
-          <p className="font-semibold">Analysis notes</p>
-          <ul className="mt-1 list-disc pl-5">
+        <div className="clarity-notes">
+          <p>Analysis notes</p>
+          <ul>
             {clarity.degradedSteps.map((step) => <li key={step}>{step}</li>)}
           </ul>
         </div>

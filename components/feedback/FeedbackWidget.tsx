@@ -5,11 +5,11 @@ import { MessageSquare, X, Check, Loader2 } from 'lucide-react';
 
 type FeedbackType = 'bug' | 'feature' | 'improvement' | 'other';
 
-const TYPES: Array<{ value: FeedbackType; label: string; icon: string }> = [
-  { value: 'bug', label: 'Bug Report', icon: '🐛' },
-  { value: 'feature', label: 'Feature Request', icon: '✨' },
-  { value: 'improvement', label: 'Improvement', icon: '💡' },
-  { value: 'other', label: 'Other', icon: '💬' },
+const TYPES: Array<{ value: FeedbackType; label: string }> = [
+  { value: 'bug', label: 'Bug Report' },
+  { value: 'feature', label: 'Feature Request' },
+  { value: 'improvement', label: 'Improvement' },
+  { value: 'other', label: 'Other' },
 ];
 
 function placeholderFor(type: FeedbackType): string {
@@ -71,12 +71,12 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
       aria-labelledby="feedback-title"
     >
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      <div className="relative z-10 w-full max-w-md rounded-xl bg-[var(--si-slate)] p-6 text-white shadow-2xl border border-white/10">
+      <div className="relative z-10 w-full max-w-md rounded-sm border border-white/15 bg-[var(--si-slate)] p-6 text-white shadow-lg">
         <button
           type="button"
           onClick={onClose}
@@ -95,10 +95,8 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
         </h3>
 
         {submitted ? (
-          <div className="py-10 text-center">
-            <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-[var(--si-green)]/20 text-[var(--si-green)]">
-              <Check className="size-7" />
-            </div>
+          <div className="border-y border-white/15 py-9 text-center">
+            <Check className="mx-auto size-7 text-[var(--si-green)]" />
             <p className="mt-4 font-semibold">Thank you!</p>
             <p className="mt-1 text-sm text-white/70">
               Your feedback helps us improve Ontologizer.
@@ -107,7 +105,7 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
         ) : (
           <form onSubmit={handleSubmit} className="mt-5 space-y-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-white/70 mb-2">
+              <label className="mb-2 block text-xs font-semibold text-white/70">
                 Type of feedback
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -116,13 +114,12 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
                     key={t.value}
                     type="button"
                     onClick={() => setType(t.value)}
-                    className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${
+                    className={`rounded-sm border px-3 py-2.5 text-sm font-semibold transition-colors ${
                       type === t.value
-                        ? 'bg-[var(--orange-accent)] text-[var(--si-dark-navy)]'
-                        : 'bg-white/10 text-white/80 hover:bg-white/15'
+                        ? 'border-[var(--orange-accent)] bg-[var(--orange-accent)] text-[var(--si-dark-navy)]'
+                        : 'border-white/20 bg-transparent text-white/80 hover:border-white/40'
                     }`}
                   >
-                    <span className="mr-1.5">{t.icon}</span>
                     {t.label}
                   </button>
                 ))}
@@ -132,7 +129,7 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
             <div>
               <label
                 htmlFor="feedback-message"
-                className="block text-xs font-semibold uppercase tracking-wide text-white/70 mb-2"
+                className="mb-2 block text-xs font-semibold text-white/70"
               >
                 Your feedback
               </label>
@@ -143,7 +140,7 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
                 placeholder={placeholderFor(type)}
                 rows={5}
                 required
-                className="w-full resize-none rounded-lg border border-white/20 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/40 focus:border-[var(--orange-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--orange-accent)]/30"
+                className="w-full resize-none rounded-sm border border-white/20 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/40 focus:border-[var(--orange-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--orange-accent)]/30"
               />
             </div>
 
@@ -155,14 +152,14 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 rounded-lg border border-white/20 px-4 py-2.5 text-sm font-semibold text-white/90 hover:bg-white/10 transition"
+                className="flex-1 rounded-sm border border-white/20 px-4 py-2.5 text-sm font-semibold text-white/90 transition-colors hover:border-white/40"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={submitting || !message.trim()}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--orange-accent)] px-4 py-2.5 text-sm font-extrabold uppercase tracking-wide text-[var(--si-dark-navy)] transition hover:bg-[var(--orange-light)] disabled:opacity-60 disabled:cursor-not-allowed"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-sm bg-[var(--orange-accent)] px-4 py-2.5 text-sm font-extrabold text-[var(--si-dark-navy)] transition-colors hover:bg-[var(--orange-light)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? (
                   <>
@@ -188,7 +185,7 @@ export function FeedbackWidget() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="feedback-trigger fixed bottom-5 right-5 z-40 rounded-full bg-[var(--orange-accent)] text-[var(--si-dark-navy)] shadow-lg transition hover:scale-105 hover:bg-[var(--orange-light)] active:scale-95"
+        className="feedback-trigger fixed bottom-5 right-5 z-40 bg-[var(--orange-accent)] text-[var(--si-dark-navy)] shadow-md transition-colors hover:bg-[var(--orange-light)]"
         aria-label="Send feedback"
       >
         <MessageSquare className="size-4" />

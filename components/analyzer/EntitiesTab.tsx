@@ -1,18 +1,16 @@
 'use client'
 
 import { ExternalLink } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
 import type { EnrichedEntity } from '@/lib/types/entities'
 
 interface EntitiesTabProps {
   entities: EnrichedEntity[]
 }
 
-function confidenceBadgeClass(score: number): string {
-  if (score >= 70) return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
-  if (score >= 40) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300'
-  return 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+function confidenceClass(score: number): string {
+  if (score >= 70) return 'entity-confidence-high'
+  if (score >= 40) return 'entity-confidence-medium'
+  return 'entity-confidence-low'
 }
 
 interface EntityLinkProps {
@@ -44,47 +42,28 @@ export function EntitiesTab({ entities }: EntitiesTabProps) {
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <ul className="entity-list">
       {entities.map((entity) => (
-        <Card key={entity.name} size="sm">
-          <CardContent>
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <span className="font-semibold">{entity.name}</span>
-                <Badge variant="secondary" className="ml-2 text-xs">
-                  {entity.type}
-                </Badge>
-              </div>
-              <span
-                className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${confidenceBadgeClass(entity.confidenceScore)}`}
-              >
-                {entity.confidenceScore}%
-              </span>
+        <li key={entity.name} className="entity-row">
+          <div className="entity-row-heading">
+            <div>
+              <strong>{entity.name}</strong>
+              <span>{entity.type}</span>
             </div>
+            <span className={`entity-confidence ${confidenceClass(entity.confidenceScore)}`}>
+              {entity.confidenceScore}% confidence
+            </span>
+          </div>
 
-            <div className="mt-2 flex flex-wrap gap-3">
-              {entity.wikipediaUrl && (
-                <EntityLink href={entity.wikipediaUrl} label="Wikipedia" />
-              )}
-              {entity.wikidataUrl && (
-                <EntityLink href={entity.wikidataUrl} label="Wikidata" />
-              )}
-              {entity.googleKgUrl && (
-                <EntityLink href={entity.googleKgUrl} label="Google KG" />
-              )}
-              {entity.productOntologyUrl && (
-                <EntityLink
-                  href={entity.productOntologyUrl}
-                  label="ProductOntology"
-                />
-              )}
-              {entity.linkedinUrl && (
-                <EntityLink href={entity.linkedinUrl} label="LinkedIn" />
-              )}
-            </div>
-          </CardContent>
-        </Card>
+          <div className="entity-links">
+            {entity.wikipediaUrl && <EntityLink href={entity.wikipediaUrl} label="Wikipedia" />}
+            {entity.wikidataUrl && <EntityLink href={entity.wikidataUrl} label="Wikidata" />}
+            {entity.googleKgUrl && <EntityLink href={entity.googleKgUrl} label="Google KG" />}
+            {entity.productOntologyUrl && <EntityLink href={entity.productOntologyUrl} label="ProductOntology" />}
+            {entity.linkedinUrl && <EntityLink href={entity.linkedinUrl} label="LinkedIn" />}
+          </div>
+        </li>
       ))}
-    </div>
+    </ul>
   )
 }
