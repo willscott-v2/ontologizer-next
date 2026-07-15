@@ -15,10 +15,10 @@ export function Header() {
           <Link href="/" className="product-brand" aria-label="Ontologizer home">
             <span className="product-brand-logo">
               <Image
-                src="/search-influence-logo.png"
-                alt="Search Influence"
-                width={112}
-                height={24}
+                src="/search-influence-logo-white.png"
+                alt="Search Influence 20th anniversary"
+                width={54}
+                height={51}
                 priority
               />
             </span>
