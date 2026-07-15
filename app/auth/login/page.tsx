@@ -24,6 +24,7 @@ function LoginPageInner() {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
@@ -51,11 +52,16 @@ function LoginPageInner() {
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setNotice('');
     setVerifying(true);
     const { error } = await verifyOtp(email, code);
     setVerifying(false);
     if (error) {
-      setError(error.message);
+      setError(
+        /expired|invalid/i.test(error.message)
+          ? 'That code didn’t work. Only the code from the newest email is valid — if you requested more than one, use the most recent, or resend below.'
+          : error.message
+      );
       return;
     }
     router.push('/');
@@ -65,11 +71,15 @@ function LoginPageInner() {
   async function handleResend() {
     setResendLoading(true);
     setError('');
+    setNotice('');
     const { error } = await sendMagicLink(email);
     setResendLoading(false);
     if (error) {
       setError(error.message);
+      return;
     }
+    setCode('');
+    setNotice('We sent a new code — codes from earlier emails no longer work.');
   }
 
   if (sent) {
@@ -102,14 +112,14 @@ function LoginPageInner() {
                       inputMode="numeric"
                       autoComplete="one-time-code"
                       pattern="[0-9]*"
-                      maxLength={6}
                       value={code}
-                      onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                      onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                       placeholder="123456"
                       required
                       autoFocus
                     />
                     {error && <p className="text-sm text-red-600">{error}</p>}
+                    {notice && <p className="text-sm text-amber-700">{notice}</p>}
                   </div>
                   <Button
                     type="submit"
