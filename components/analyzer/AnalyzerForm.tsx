@@ -3,31 +3,38 @@
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Search, ClipboardPaste, Loader2 } from 'lucide-react';
-import type { AnalyzeParams, MainTopicStrategy } from '@/lib/types/analysis';
+import type { AnalyzeParams } from '@/lib/types/analysis';
 
 interface AnalyzerFormProps {
   onSubmit: (params: AnalyzeParams) => void;
   isAnalyzing: boolean;
   hasApiKeys?: boolean;
   isSignedIn?: boolean;
+  isEligibilityLoading?: boolean;
 }
 
-export function AnalyzerForm({ onSubmit, isAnalyzing, hasApiKeys, isSignedIn }: AnalyzerFormProps) {
+export function AnalyzerForm({
+  onSubmit,
+  isAnalyzing,
+  hasApiKeys = false,
+  isSignedIn = false,
+  isEligibilityLoading = false,
+}: AnalyzerFormProps) {
   const [mode, setMode] = useState<'url' | 'paste'>('url');
   const [url, setUrl] = useState('');
   const [pasteContent, setPasteContent] = useState('');
-  const [mainTopicStrategy, setMainTopicStrategy] = useState<MainTopicStrategy>('strict');
+  const [pasteFormat, setPasteFormat] = useState<'text' | 'html'>('text');
+  const [mainTopicOverride, setMainTopicOverride] = useState('');
   const [clearCache, setClearCache] = useState(false);
   const [runFanout, setRunFanout] = useState(false);
-  const [fanoutOnly, setFanoutOnly] = useState(false);
 
-  const canSubmit = hasApiKeys || isSignedIn || (hasApiKeys === undefined && isSignedIn === undefined);
+  const canSubmit = !isEligibilityLoading && (hasApiKeys || isSignedIn);
   const hasInput = mode === 'url' ? url.trim() : pasteContent.trim();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!hasInput || !canSubmit) return;
-    onSubmit({ mode, url, pasteContent, mainTopicStrategy, clearCache, runFanout, fanoutOnly });
+    onSubmit({ mode, url, pasteContent, pasteFormat, mainTopicOverride, clearCache, runFanout });
   }
 
   return (
@@ -59,6 +66,7 @@ export function AnalyzerForm({ onSubmit, isAnalyzing, hasApiKeys, isSignedIn }: 
         <div className="url-input-group">
           <input
             id="url"
+            aria-label="Page URL"
             type="url"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
@@ -84,7 +92,21 @@ export function AnalyzerForm({ onSubmit, isAnalyzing, hasApiKeys, isSignedIn }: 
       ) : (
         <>
           <div className="form-group">
-            <label htmlFor="paste">Paste HTML, Markdown, or plain text</label>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <label htmlFor="paste">Paste page content</label>
+              <label className="flex items-center gap-2 text-sm text-white">
+                Format
+                <select
+                  value={pasteFormat}
+                  onChange={(event) => setPasteFormat(event.target.value as 'text' | 'html')}
+                  disabled={isAnalyzing}
+                  className="rounded-md border border-white/20 bg-white/10 px-2 py-1 text-sm text-white"
+                >
+                  <option value="text">Plain text or Markdown</option>
+                  <option value="html">HTML</option>
+                </select>
+              </label>
+            </div>
             <textarea
               id="paste"
               value={pasteContent}
@@ -112,31 +134,24 @@ export function AnalyzerForm({ onSubmit, isAnalyzing, hasApiKeys, isSignedIn }: 
         </>
       )}
 
-      {/* Options row */}
-      <div className="flex flex-wrap items-center gap-4 text-sm text-white/80 mt-6">
-        <div
-          className="flex items-center gap-2"
-          title="How Ontologizer picks the page's main topic. Strict = uses both title and body; Title only = title tag only; Most frequent = most-repeated entity; Pattern = regex-style pattern matching."
-        >
-          <label htmlFor="strategy" className="text-white/70">
-            Topic strategy
-            <span className="ml-1 text-white/50" aria-hidden="true">
-              ⓘ
-            </span>
-          </label>
-          <select
-            id="strategy"
-            value={mainTopicStrategy}
-            onChange={(e) => setMainTopicStrategy(e.target.value as MainTopicStrategy)}
+      <details className="mt-6 rounded-lg border border-white/15 bg-white/5 p-4 text-sm text-white">
+        <summary className="cursor-pointer font-semibold text-white">Advanced options</summary>
+        <p className="mt-2 text-xs text-white/90">
+          Override the detected topic, bypass cached source data, or add optional modeled-question coverage.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-2 text-white">
+          Main topic override
+          <input
+            type="text"
+            value={mainTopicOverride}
+            onChange={(event) => setMainTopicOverride(event.target.value)}
+            placeholder="Optional"
+            maxLength={120}
             disabled={isAnalyzing}
-            className="rounded-md border border-white/20 bg-white/10 px-2 py-1 text-sm text-white"
-          >
-            <option value="strict">Title + Body (strict)</option>
-            <option value="title">Title only</option>
-            <option value="frequent">Most frequent</option>
-            <option value="pattern">Pattern match</option>
-          </select>
-        </div>
+            className="w-44 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-sm text-white placeholder:text-white/70"
+          />
+        </label>
 
         <label
           className="flex items-center gap-1.5 cursor-pointer"
@@ -155,44 +170,25 @@ export function AnalyzerForm({ onSubmit, isAnalyzing, hasApiKeys, isSignedIn }: 
 
         <label
           className="flex items-center gap-1.5 cursor-pointer"
-          title="Also run Gemini fan-out: a simulation of how Google AI Mode decomposes queries about this page, with coverage scoring per sub-query."
+          title="Model likely questions and assess whether this page contains enough information to answer them."
         >
           <input
             type="checkbox"
             checked={runFanout}
-            onChange={(e) => {
-              setRunFanout(e.target.checked);
-              if (!e.target.checked) setFanoutOnly(false);
-            }}
+            onChange={(e) => setRunFanout(e.target.checked)}
             disabled={isAnalyzing}
             className="accent-[var(--orange-accent)]"
           />
-          Fan-out analysis
+          AI Query Coverage
           <span className="text-white/40" aria-hidden="true">ⓘ</span>
         </label>
 
-        {runFanout && (
-          <label
-            className="flex items-center gap-1.5 cursor-pointer"
-            title="Skip entity enrichment, JSON-LD, and recommendations — run only the fan-out step. Fastest path if you just want the query-decomposition report."
-          >
-            <input
-              type="checkbox"
-              checked={fanoutOnly}
-              onChange={(e) => setFanoutOnly(e.target.checked)}
-              disabled={isAnalyzing}
-              className="accent-[var(--orange-accent)]"
-            />
-            Fan-out only
-            <span className="text-white/40" aria-hidden="true">ⓘ</span>
-          </label>
-        )}
-
         {hasApiKeys && <Badge variant="secondary">Using your API keys</Badge>}
-      </div>
+        </div>
+      </details>
 
-      {!canSubmit && (
-        <p className="text-sm text-white/70 mt-4">
+      {!isEligibilityLoading && !canSubmit && (
+        <p className="mt-4 text-sm text-white/90">
           <a href="/auth/login" className="text-[var(--orange-accent)] hover:underline">
             Sign in
           </a>

@@ -118,7 +118,7 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
                     onClick={() => setType(t.value)}
                     className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition ${
                       type === t.value
-                        ? 'bg-[var(--orange-accent)] text-white'
+                        ? 'bg-[var(--orange-accent)] text-[var(--si-dark-navy)]'
                         : 'bg-white/10 text-white/80 hover:bg-white/15'
                     }`}
                   >
@@ -162,7 +162,7 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
               <button
                 type="submit"
                 disabled={submitting || !message.trim()}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--orange-accent)] px-4 py-2.5 text-sm font-extrabold uppercase tracking-wide text-white transition hover:bg-[var(--orange-dark)] disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--orange-accent)] px-4 py-2.5 text-sm font-extrabold uppercase tracking-wide text-[var(--si-dark-navy)] transition hover:bg-[var(--orange-light)] disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {submitting ? (
                   <>
@@ -188,7 +188,7 @@ export function FeedbackWidget() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-[var(--orange-accent)] px-5 py-3 text-sm font-extrabold uppercase tracking-wide text-white shadow-lg transition hover:scale-105 hover:bg-[var(--orange-dark)] active:scale-95"
+        className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-[var(--orange-accent)] px-5 py-3 text-sm font-extrabold uppercase tracking-wide text-[var(--si-dark-navy)] shadow-lg transition hover:scale-105 hover:bg-[var(--orange-light)] active:scale-95"
         aria-label="Send feedback"
       >
         <MessageSquare className="size-4" />

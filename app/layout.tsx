@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Open_Sans } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -10,19 +9,29 @@ import {
 import { FeedbackWidget } from "@/components/feedback/FeedbackWidget";
 import "./globals.css";
 
-const openSans = Open_Sans({
-  subsets: ["latin"],
-  weight: ["300", "400", "600", "800"],
-  display: "swap",
-  variable: "--font-open-sans",
-});
-
 const gscVerification = process.env.GOOGLE_SEARCH_CONSOLE_VERIFICATION;
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ontologizer.searchinfluence.com";
 
 export const metadata: Metadata = {
-  title: "Ontologizer - Entity Extraction & Structured Data",
+  metadataBase: new URL(siteUrl),
+  title: "Free AI Content Clarity & Schema Analyzer | Ontologizer",
   description:
-    "Extract named entities from webpages, enrich with Wikipedia/Wikidata/Knowledge Graph, and generate JSON-LD structured data for SEO.",
+    "Analyze one page for topic focus, entity clarity, semantic coherence, answer structure, and connected JSON-LD schema. Free from Search Influence.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: "Ontologizer by Search Influence",
+    title: "Free AI Content Clarity & Schema Analyzer",
+    description:
+      "See whether one page clearly explains its topic, supports related entities, answers likely questions, and has safe connected schema.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Free AI Content Clarity & Schema Analyzer",
+    description:
+      "Evidence-backed clarity checks, modeled query coverage, and connected JSON-LD for one page.",
+  },
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",
@@ -38,10 +47,33 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const applicationSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: "Ontologizer",
+    url: siteUrl,
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "Web",
+    description:
+      "A free single-page analyzer for AI content clarity, entity review, modeled query coverage, and connected schema markup.",
+    provider: {
+      "@type": "Organization",
+      name: "Search Influence",
+      url: "https://www.searchinfluence.com/",
+    },
+    offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+  };
+
   return (
-    <html lang="en" className={`${openSans.variable} h-full antialiased`}>
+    <html lang="en" className="h-full antialiased">
       <head suppressHydrationWarning>
         <GoogleTagManager />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(applicationSchema).replace(/</g, "\\u003c"),
+          }}
+        />
       </head>
       <body className="flex min-h-full flex-col">
         <GoogleTagManagerNoScript />

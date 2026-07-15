@@ -9,17 +9,23 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createHash } from 'crypto';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 
 const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 const MAX_BODY_SIZE = 5_000_000; // 5 MB
+const MAX_REDIRECTS = 5;
 const URL_CACHE_TTL_HOURS = 1;
 
 export interface FetchResult {
   html: string;
   contentHash: string;
   cached: boolean;
+  finalUrl: string;
+  redirectCount: number;
+  contentType: string | null;
 }
 
 export interface FetchOptions {
@@ -34,7 +40,17 @@ function getServiceClient(): SupabaseClient | null {
 }
 
 function normalizeUrl(url: string): string {
-  return url.trim().toLowerCase();
+  const parsed = new URL(url.trim());
+  parsed.protocol = parsed.protocol.toLowerCase();
+  parsed.hostname = parsed.hostname.toLowerCase();
+  parsed.hash = '';
+  if (
+    (parsed.protocol === 'https:' && parsed.port === '443') ||
+    (parsed.protocol === 'http:' && parsed.port === '80')
+  ) {
+    parsed.port = '';
+  }
+  return parsed.toString();
 }
 
 export function hashUrlForCache(url: string): string {
@@ -58,6 +74,100 @@ function cleanedTextForHash(html: string): string {
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function isPrivateOrReservedIpv4(address: string): boolean {
+  const octets = address.split('.').map(Number);
+  if (octets.length !== 4 || octets.some((value) => !Number.isInteger(value))) {
+    return true;
+  }
+
+  const [a, b, c] = octets;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+    (a === 192 && b === 88 && c === 99) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113) ||
+    a >= 224
+  );
+}
+
+export function isPrivateOrReservedIp(address: string): boolean {
+  const version = isIP(address);
+  if (version === 4) return isPrivateOrReservedIpv4(address);
+  if (version !== 6) return true;
+
+  const normalized = address.toLowerCase();
+  if (normalized.startsWith('::ffff:')) {
+    const mapped = normalized.slice('::ffff:'.length);
+    return mapped.includes('.') ? isPrivateOrReservedIpv4(mapped) : true;
+  }
+
+  return (
+    normalized === '::' ||
+    normalized === '::1' ||
+    normalized.startsWith('fc') ||
+    normalized.startsWith('fd') ||
+    /^fe[89ab]/.test(normalized) ||
+    normalized.startsWith('ff') ||
+    normalized.startsWith('2001:db8:')
+  );
+}
+
+export async function validatePublicUrl(rawUrl: string): Promise<URL> {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl.trim());
+  } catch {
+    throw new Error('Enter a valid webpage URL.');
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('Only HTTP and HTTPS webpage URLs are supported.');
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error('URLs containing credentials are not supported.');
+  }
+
+  const hostname = parsed.hostname
+    .toLowerCase()
+    .replace(/\.$/, '')
+    .replace(/^\[|\]$/g, '');
+  if (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname.endsWith('.local') ||
+    hostname.endsWith('.internal')
+  ) {
+    throw new Error('Private or local network URLs are not supported.');
+  }
+
+  const literalVersion = isIP(hostname);
+  let addresses: Array<{ address: string }>;
+  try {
+    addresses = literalVersion
+      ? [{ address: hostname }]
+      : await lookup(hostname, { all: true, verbatim: true });
+  } catch {
+    throw new Error('The webpage hostname could not be resolved.');
+  }
+
+  if (
+    addresses.length === 0 ||
+    addresses.some(({ address }) => isPrivateOrReservedIp(address))
+  ) {
+    throw new Error('Private or reserved network URLs are not supported.');
+  }
+
+  return parsed;
 }
 
 async function readFromUrlCache(
@@ -125,6 +235,35 @@ async function writeUrlCache(
   );
 }
 
+async function readHtmlBody(response: Response): Promise<string> {
+  if (!response.body) {
+    const fallback = await response.text();
+    if (Buffer.byteLength(fallback, 'utf8') > MAX_BODY_SIZE) {
+      throw new Error('The webpage is larger than the 5 MB analysis limit.');
+    }
+    return fallback;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const chunks: string[] = [];
+  let bytesRead = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytesRead += value.byteLength;
+    if (bytesRead > MAX_BODY_SIZE) {
+      await reader.cancel();
+      throw new Error('The webpage is larger than the 5 MB analysis limit.');
+    }
+    chunks.push(decoder.decode(value, { stream: true }));
+  }
+
+  chunks.push(decoder.decode());
+  return chunks.join('');
+}
+
 /**
  * Fetch a webpage's HTML, using url_cache when available.
  *
@@ -136,8 +275,9 @@ export async function fetchWebpage(
   options: FetchOptions = {},
 ): Promise<FetchResult> {
   const { clearCache = false } = options;
+  const validatedUrl = await validatePublicUrl(url);
   const supabase = getServiceClient();
-  const urlHash = hashUrlForCache(url);
+  const urlHash = hashUrlForCache(validatedUrl.toString());
 
   // Cache read (skipped when clearCache is true)
   if (supabase && !clearCache) {
@@ -148,6 +288,9 @@ export async function fetchWebpage(
         html: cached.raw_html,
         contentHash: cached.content_hash,
         cached: true,
+        finalUrl: validatedUrl.toString(),
+        redirectCount: 0,
+        contentType: 'text/html',
       };
     }
   }
@@ -156,21 +299,39 @@ export async function fetchWebpage(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45_000);
 
-  let html: string;
+  let html = '';
   let statusCode = 0;
   let contentType: string | null = null;
+  let finalUrl = validatedUrl.toString();
+  let redirectCount = 0;
 
   try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': USER_AGENT,
-        Accept:
-          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      redirect: 'follow',
-    });
+    let currentUrl = validatedUrl;
+    let response: Response | null = null;
+
+    for (let redirectAttempt = 0; redirectAttempt <= MAX_REDIRECTS; redirectAttempt += 1) {
+      response = await fetch(currentUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': USER_AGENT,
+          Accept: 'text/html,application/xhtml+xml;q=0.9',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+        redirect: 'manual',
+      });
+
+      if (![301, 302, 303, 307, 308].includes(response.status)) break;
+      if (redirectAttempt === MAX_REDIRECTS) {
+        throw new Error(`The webpage redirected more than ${MAX_REDIRECTS} times.`);
+      }
+
+      const location = response.headers.get('location');
+      if (!location) throw new Error('The webpage returned an invalid redirect.');
+      currentUrl = await validatePublicUrl(new URL(location, currentUrl).toString());
+      redirectCount = redirectAttempt + 1;
+    }
+
+    if (!response) throw new Error('The webpage did not return a response.');
 
     statusCode = response.status;
     contentType = response.headers.get('content-type');
@@ -179,12 +340,18 @@ export async function fetchWebpage(
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    html = await response.text();
-
-    // Truncate if the body exceeds the size limit
-    if (html.length > MAX_BODY_SIZE) {
-      html = html.slice(0, MAX_BODY_SIZE);
+    const mediaType = contentType?.split(';', 1)[0].trim().toLowerCase();
+    if (mediaType && !['text/html', 'application/xhtml+xml'].includes(mediaType)) {
+      throw new Error(`Unsupported content type: ${mediaType}`);
     }
+
+    const declaredLength = Number(response.headers.get('content-length'));
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_SIZE) {
+      throw new Error('The webpage is larger than the 5 MB analysis limit.');
+    }
+
+    finalUrl = currentUrl.toString();
+    html = await readHtmlBody(response);
   } finally {
     clearTimeout(timeout);
   }
@@ -203,5 +370,12 @@ export async function fetchWebpage(
     }).catch(() => {});
   }
 
-  return { html, contentHash, cached: false };
+  return {
+    html,
+    contentHash,
+    cached: false,
+    finalUrl,
+    redirectCount,
+    contentType,
+  };
 }

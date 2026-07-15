@@ -1,163 +1,182 @@
-/**
- * POST /api/analyze/extract
- *
- * Accepts a URL (fetches + parses) or pasteContent (parses directly),
- * extracts entities via OpenAI (with BYOK) or regex fallback,
- * and returns an ExtractResult.
- *
- * Cache layers:
- *   - url_cache (1hr TTL) via fetchWebpage
- *   - extraction_cache (24hr TTL) keyed by content_hash of cleaned text
- * Both are bypassed (read-skip, write-through) when body.clearCache === true.
- */
-
+import { randomUUID } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
+import type { User } from '@supabase/supabase-js';
 import { fetchWebpage, hashContent } from '@/lib/pipeline/fetcher';
 import { extractTextFromHtml } from '@/lib/pipeline/parser';
 import { extractEntities } from '@/lib/pipeline/entity-extractor';
-import {
-  checkFreeUsage,
-  incrementFreeUsage,
-} from '@/lib/metering/usage-tracker';
-import {
-  getCachedExtraction,
-  cacheExtraction,
-} from '@/lib/cache/extraction-cache';
+import { checkFreeUsage, incrementFreeUsage } from '@/lib/metering/usage-tracker';
+import { getCachedExtraction, cacheExtraction } from '@/lib/cache/extraction-cache';
 import { createClient } from '@/lib/supabase/server';
+import { createAnalysisRun } from '@/lib/analysis/run-store';
+import { ANALYSIS_VERSION } from '@/lib/analysis/version';
+import { extractionCacheKey } from '@/lib/analysis/cache-keys';
+import { extractRequestSchema, formatZodError } from '@/lib/analysis/request-schemas';
 import type { ExtractResult } from '@/lib/types/analysis';
 
-interface ExtractRequestBody {
-  url?: string;
-  pasteContent?: string;
-  clearCache?: boolean;
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as ExtractRequestBody;
-    const clearCache = !!body.clearCache;
+    const parsed = extractRequestSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: formatZodError(parsed.error) },
+        { status: 400 },
+      );
+    }
+    const body = parsed.data;
 
-    // BYOK: read OpenAI key from header
     const byokOpenaiKey = request.headers.get('X-OpenAI-Key') || undefined;
-    const isByok = !!byokOpenaiKey;
-
-    // If no BYOK key, check free tier eligibility
+    const isByok = Boolean(byokOpenaiKey);
+    let user: User | null = null;
     let openaiKey = byokOpenaiKey;
+
     if (!isByok) {
       const supabase = await createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-
+      const auth = await supabase.auth.getUser();
+      user = auth.data.user;
       if (!user) {
         return NextResponse.json(
-          { error: 'Sign in for free analyses or add your own API keys in Settings.' },
+          { error: 'Sign in for free analyses or add your OpenAI API key in Settings.' },
           { status: 401 },
         );
       }
 
       const usage = await checkFreeUsage(user.id);
       if (!usage.allowed) {
-        return NextResponse.json(
-          { error: usage.reason },
-          { status: 429 },
-        );
+        return NextResponse.json({ error: usage.reason }, { status: 429 });
       }
-
-      openaiKey = process.env.OPENAI_API_KEY ?? undefined;
-
-      // Increment usage counter (fire and forget; no-op for unlimited domains)
-      incrementFreeUsage(user.id).catch(() => {});
+      openaiKey = process.env.OPENAI_API_KEY || undefined;
+    } else {
+      try {
+        const supabase = await createClient();
+        user = (await supabase.auth.getUser()).data.user;
+      } catch {
+        user = null;
+      }
     }
 
-    // Get HTML content from URL or pasted text
-    let html: string;
-    let contentHash: string;
-
-    if (body.url) {
-      try {
-        const fetched = await fetchWebpage(body.url, { clearCache });
-        html = fetched.html;
-        contentHash = fetched.contentHash;
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Failed to fetch webpage';
-        return NextResponse.json({ error: message }, { status: 502 });
-      }
-    } else if (body.pasteContent) {
-      // Treat pasted content as raw HTML (or wrap plain text in minimal HTML)
-      html = body.pasteContent.trim().startsWith('<')
-        ? body.pasteContent
-        : `<html><body>${body.pasteContent}</body></html>`;
-      // Hash the pasted content directly — no url_cache round-trip
-      contentHash = hashContent(body.pasteContent);
-    } else {
+    if (!openaiKey) {
       return NextResponse.json(
-        { error: 'Provide either a "url" or "pasteContent" field.' },
-        { status: 400 },
+        { error: 'OpenAI entity extraction is temporarily unavailable.' },
+        { status: 503 },
       );
     }
 
-    // Parse HTML into structured text parts (always from the fresh fetch)
+    let html: string;
+    let contentHash: string;
+    let fetchedFromCache = false;
+    let finalUrl: string | undefined;
+    let redirectCount = 0;
+    let contentType: string | null = null;
+
+    if (body.url) {
+      const fetched = await fetchWebpage(body.url, { clearCache: body.clearCache });
+      html = fetched.html;
+      contentHash = fetched.contentHash;
+      fetchedFromCache = fetched.cached;
+      finalUrl = fetched.finalUrl;
+      redirectCount = fetched.redirectCount;
+      contentType = fetched.contentType;
+    } else {
+      const pasted = body.pasteContent!.trim();
+      html = body.pasteFormat === 'html'
+        ? pasted
+        : `<html><body><pre>${escapeHtml(pasted)}</pre></body></html>`;
+      contentHash = hashContent(pasted);
+    }
+
     const textParts = extractTextFromHtml(html);
+    const extractionHash = extractionCacheKey(contentHash, body.mainTopicOverride);
 
-    // Try the extraction cache before hitting OpenAI
-    let cachedExtraction = null;
-    if (!clearCache) {
-      cachedExtraction = await getCachedExtraction(contentHash);
-    }
+    const cachedExtraction = body.clearCache
+      ? null
+      : await getCachedExtraction(extractionHash);
 
-    if (cachedExtraction) {
-      const result: ExtractResult = {
-        textParts,
-        mainTopic: cachedExtraction.mainTopic,
-        mainTopicConfidence: cachedExtraction.mainTopicConfidence,
-        entities: cachedExtraction.entities,
-        tokenUsage: cachedExtraction.tokenUsage,
-        costUsd: cachedExtraction.costUsd,
-        cached: true,
-        contentHash,
-      };
-      return NextResponse.json(result);
-    }
-
-    // Build a single text blob for entity extraction (matching PHP approach)
-    const headingTexts = textParts.headings.map((h) => h.text);
+    const headingTexts = textParts.headings.map((heading) => heading.text);
     const fullText = [
       textParts.title,
       textParts.description,
       ...headingTexts,
       textParts.body,
-    ]
-      .filter(Boolean)
-      .join('. ');
+    ].filter(Boolean).join('. ');
 
-    // Extract entities (cache miss or clearCache)
-    const extraction = await extractEntities(fullText, openaiKey);
+    const liveExtraction = cachedExtraction
+      ? null
+      : await extractEntities(fullText, openaiKey);
+    const extraction = cachedExtraction ?? liveExtraction!;
+    const mainTopic = body.mainTopicOverride?.trim() || extraction.mainTopic.trim();
+    if (!mainTopic || extraction.entities.length === 0) {
+      return NextResponse.json(
+        { error: 'The page did not contain enough clear content to identify a topic and entities.' },
+        { status: 422 },
+      );
+    }
 
-    // Write-through to extraction cache (fire and forget)
-    cacheExtraction(contentHash, {
-      entities: extraction.entities,
-      mainTopic: extraction.mainTopic,
-      mainTopicConfidence: extraction.mainTopicConfidence,
-      tokenUsage: extraction.tokenUsage,
-      costUsd: extraction.costUsd,
-    }).catch(() => {});
+    if (!cachedExtraction) {
+      await cacheExtraction(extractionHash, {
+        entities: extraction.entities,
+        mainTopic,
+        mainTopicConfidence: body.mainTopicOverride ? 1 : extraction.mainTopicConfidence,
+        tokenUsage: extraction.tokenUsage,
+        costUsd: extraction.costUsd,
+      });
+    }
+
+    const analysisRunId = await createAnalysisRun({
+      user,
+      url: body.url,
+      analysisType: body.url ? 'full' : 'paste',
+      keySource: isByok ? 'byok' : 'free_tier',
+      contentHash,
+      entitiesFound: extraction.entities.length,
+      openaiInputTokens: liveExtraction?.usage?.inputTokens,
+      openaiOutputTokens: liveExtraction?.usage?.outputTokens,
+      openaiCostUsd: liveExtraction?.usage?.costUsd,
+    });
+
+    if (!analysisRunId && !isByok) {
+      return NextResponse.json(
+        { error: 'The analysis run could not be started. Please try again.' },
+        { status: 503 },
+      );
+    }
+    if (!isByok && user) await incrementFreeUsage(user.id);
 
     const result: ExtractResult = {
       textParts,
-      mainTopic: extraction.mainTopic,
-      mainTopicConfidence: extraction.mainTopicConfidence,
+      mainTopic,
+      mainTopicConfidence: body.mainTopicOverride ? 1 : extraction.mainTopicConfidence,
       entities: extraction.entities,
-      tokenUsage: extraction.tokenUsage,
-      costUsd: extraction.costUsd,
-      cached: false,
+      tokenUsage: cachedExtraction ? undefined : extraction.tokenUsage,
+      costUsd: cachedExtraction ? undefined : extraction.costUsd,
+      cacheStatus: {
+        fetch: body.url ? (fetchedFromCache ? 'cached' : 'fresh') : 'pasted',
+        extraction: cachedExtraction ? 'cached' : 'fresh',
+      },
       contentHash,
-      usage: extraction.usage,
+      usage: liveExtraction?.usage,
+      analysisRunId: analysisRunId ?? randomUUID(),
+      analysisVersion: ANALYSIS_VERSION,
+      fetchMetadata: {
+        source: body.url ? 'url' : 'paste',
+        finalUrl,
+        redirectCount,
+        contentType,
+      },
     };
 
     return NextResponse.json(result);
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    const status = /URL|network|HTTP|content type|webpage|redirect/i.test(message) ? 502 : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

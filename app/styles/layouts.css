@@ -165,7 +165,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .analyze-btn {
   padding: 16px 32px;
   background: var(--orange-accent);
-  color: var(--white);
+  color: var(--dark-blue);
   border: none;
   border-radius: 8px;
   font-size: 16px;
@@ -185,7 +185,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 .analyze-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  background: var(--orange-dark);
+  background: var(--si-header-accent);
 }
 
 .analyze-btn:disabled {
@@ -243,7 +243,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .results-header {
   background: var(--si-report-green);
   padding: 30px 40px;
-  color: var(--white);
+  color: var(--dark-blue);
   border-bottom: 1px solid rgba(1, 44, 58, 0.08);
 }
 
@@ -354,7 +354,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 .si-footer a {
   color: var(--orange-accent);
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
   transition: color 0.3s ease;
 }
 
@@ -431,8 +432,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 .input-mode-toggle button.active {
-  background: rgba(255, 255, 255, 0.18);
-  color: var(--white);
+  background: var(--orange-accent);
+  color: var(--dark-blue);
   font-weight: 800;
 }
 
@@ -499,6 +500,16 @@ html, body { max-width: 100%; overflow-x: hidden; }
     text-align: center;
   }
 
+  .header-top {
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .header-nav {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
   .logo-section h1 { font-size: 2.5rem; }
 
   .url-input-group { flex-direction: column; }
@@ -539,6 +550,23 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .si-container { padding: 0 12px; }
 
   .si-header { padding: 28px 0; }
+
+  .header-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-nav {
+    justify-content: flex-start;
+    gap: 6px;
+  }
+
+  .header-nav a,
+  .header-nav button {
+    padding-inline: 8px;
+  }
+
+  .header-user { display: none; }
 
   .logo-section h1 { font-size: 2rem; }
 

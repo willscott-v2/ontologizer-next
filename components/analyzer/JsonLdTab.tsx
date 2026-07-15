@@ -4,12 +4,14 @@ import { useState } from 'react'
 import { Copy, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { trackEvent } from '@/lib/analytics/events'
 
 interface JsonLdTabProps {
   jsonLd: Record<string, unknown>
+  schemaStatus?: 'ready' | 'review' | 'insufficient'
 }
 
-export function JsonLdTab({ jsonLd }: JsonLdTabProps) {
+export function JsonLdTab({ jsonLd, schemaStatus }: JsonLdTabProps) {
   const [copied, setCopied] = useState(false)
   const formatted = JSON.stringify(jsonLd, null, 2)
 
@@ -17,7 +19,7 @@ export function JsonLdTab({ jsonLd }: JsonLdTabProps) {
     try {
       await navigator.clipboard.writeText(formatted)
       setCopied(true)
-      toast.success('Copied!')
+      trackEvent('schema_copied', { schema_status: schemaStatus })
       setTimeout(() => setCopied(false), 2000)
     } catch {
       toast.error('Failed to copy to clipboard')
@@ -49,7 +51,11 @@ export function JsonLdTab({ jsonLd }: JsonLdTabProps) {
           )}
         </Button>
       </div>
-      <pre className="overflow-auto rounded-lg bg-muted p-4 text-xs leading-relaxed font-mono">
+      <pre
+        aria-label="Generated JSON-LD"
+        tabIndex={0}
+        className="overflow-auto rounded-lg bg-muted p-4 text-xs leading-relaxed font-mono"
+      >
         {formatted}
       </pre>
     </div>

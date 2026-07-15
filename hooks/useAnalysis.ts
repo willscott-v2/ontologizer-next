@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import type {
   AnalysisStep,
   AnalysisResult,
@@ -9,47 +9,8 @@ import type {
   EnrichResult,
   GenerateResult,
   FanoutResult,
-  AiUsage,
 } from '@/lib/types/analysis'
-import type { EnrichedEntity, RawEntity } from '@/lib/types/entities'
-
-const ENRICH_BATCH_SIZE = 5
-
-interface UsageTotals {
-  openaiInputTokens: number
-  openaiOutputTokens: number
-  openaiCostUsd: number
-  geminiInputTokens: number
-  geminiOutputTokens: number
-  geminiCostUsd: number
-  totalCostUsd: number
-}
-
-function sumUsage(usages: Array<AiUsage | undefined>): UsageTotals {
-  const totals: UsageTotals = {
-    openaiInputTokens: 0,
-    openaiOutputTokens: 0,
-    openaiCostUsd: 0,
-    geminiInputTokens: 0,
-    geminiOutputTokens: 0,
-    geminiCostUsd: 0,
-    totalCostUsd: 0,
-  }
-  for (const u of usages) {
-    if (!u) continue
-    if (u.provider === 'openai') {
-      totals.openaiInputTokens += u.inputTokens
-      totals.openaiOutputTokens += u.outputTokens
-      totals.openaiCostUsd += u.costUsd
-    } else {
-      totals.geminiInputTokens += u.inputTokens
-      totals.geminiOutputTokens += u.outputTokens
-      totals.geminiCostUsd += u.costUsd
-    }
-    totals.totalCostUsd += u.costUsd
-  }
-  return totals
-}
+import { trackEvent } from '@/lib/analytics/events'
 
 interface EnrichProgress {
   current: number
@@ -61,31 +22,24 @@ async function postJson<T>(
   body: Record<string, unknown>,
   headers: Record<string, string>
 ): Promise<T> {
-  const res = await fetch(url, {
+  const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
   })
-  if (!res.ok) {
-    const text = await res.text()
-    let message: string
+  if (!response.ok) {
+    const text = await response.text()
     try {
-      const json = JSON.parse(text)
-      message = json.error || json.message || text
-    } catch {
-      message = text
+      const parsed = JSON.parse(text) as { error?: string; message?: string }
+      throw new Error(parsed.error || parsed.message || text)
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error(text || `Request failed with status ${response.status}`)
+      }
+      throw error
     }
-    throw new Error(message || `Request failed with status ${res.status}`)
   }
-  return res.json() as Promise<T>
-}
-
-function batchArray<T>(arr: T[], size: number): T[][] {
-  const batches: T[][] = []
-  for (let i = 0; i < arr.length; i += size) {
-    batches.push(arr.slice(i, i + size))
-  }
-  return batches
+  return response.json() as Promise<T>
 }
 
 export function useAnalysis() {
@@ -97,235 +51,129 @@ export function useAnalysis() {
     total: 0,
   })
 
-  // Track partial results so we can preserve them on error
-  const partialRef = useRef<Partial<AnalysisResult>>({})
-
   const reset = useCallback(() => {
     setStep('idle')
     setResult(null)
     setError(null)
     setEnrichProgress({ current: 0, total: 0 })
-    partialRef.current = {}
   }, [])
 
-  const logAnalysisRun = useCallback(
-    (payload: {
-      url?: string
-      analysisType: 'full' | 'fanout_only' | 'paste'
-      keySource: 'byok' | 'free_tier'
-      entitiesFound?: number
-      processingTimeMs?: number
-      status?: 'complete' | 'failed'
-      errorStep?: 'extract' | 'enrich' | 'generate'
-      errorMessage?: string
-      result?: AnalysisResult
-    } & Partial<UsageTotals>) => {
-      fetch('/api/analyze/log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      }).catch(() => {})
-    },
-    []
-  )
+  const finalizeRun = useCallback((payload: Record<string, unknown>) => {
+    fetch('/api/analyze/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => {})
+  }, [])
 
   const analyze = useCallback(
     async (params: AnalyzeParams, apiHeaders: Record<string, string>) => {
       const startTime = Date.now()
-      const keySource: 'byok' | 'free_tier' =
-        Object.keys(apiHeaders).length > 0 ? 'byok' : 'free_tier'
-      const analysisType: 'full' | 'fanout_only' | 'paste' = params.fanoutOnly
-        ? 'fanout_only'
-        : params.mode === 'paste'
-          ? 'paste'
-          : 'full'
       setStep('extracting')
       setError(null)
       setResult(null)
-      partialRef.current = {}
+      trackEvent('analysis_started', {
+        input_mode: params.mode,
+        query_coverage_requested: params.runFanout,
+        key_mode: Object.keys(apiHeaders).length > 0 ? 'byok' : 'free_tier',
+      })
 
       let extractResult: ExtractResult
-      let enrichedEntities: EnrichedEntity[] = []
-      let generateResult: GenerateResult | null = null
-      let fanoutResult: FanoutResult | undefined
-
-      // Tier 4: Full-analysis cache short-circuit. URL mode only, honors
-      // clearCache. Cache read failures are non-fatal — fall through to
-      // the normal pipeline.
-      if (params.mode === 'url' && params.url && !params.clearCache) {
-        try {
-          const cacheRes = await fetch('/api/analyze/cache-check', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: params.url }),
-          })
-          if (cacheRes.ok) {
-            const { cached } = (await cacheRes.json()) as {
-              cached: AnalysisResult | null
-            }
-            if (cached) {
-              setResult({ ...cached, cached: true })
-              setStep('complete')
-              // Cache hit spent no tokens — usage fields default to zero
-              logAnalysisRun({
-                url: params.url,
-                analysisType,
-                keySource,
-                entitiesFound: cached.entities?.length ?? 0,
-                processingTimeMs: Date.now() - startTime,
-                status: 'complete',
-                result: { ...cached, cached: true },
-              })
-              return
-            }
-          }
-        } catch {
-          // non-fatal — continue to live pipeline
-        }
-      }
-
-      // Step 1: Extract
       try {
         extractResult = await postJson<ExtractResult>(
           '/api/analyze/extract',
           {
-            url: params.url,
-            pasteContent: params.pasteContent,
-            mainTopicStrategy: params.mainTopicStrategy,
+            url: params.mode === 'url' ? params.url : undefined,
+            pasteContent: params.mode === 'paste' ? params.pasteContent : undefined,
+            pasteFormat: params.pasteFormat,
+            mainTopicOverride: params.mainTopicOverride || undefined,
             clearCache: params.clearCache,
+            runQueryCoverage: params.runFanout,
           },
           apiHeaders
         )
-      } catch (err) {
+      } catch (extractError) {
+        const message = extractError instanceof Error
+          ? extractError.message
+          : 'Entity extraction failed'
         setStep('error')
-        const message =
-          err instanceof Error ? err.message : 'Entity extraction failed'
         setError(message)
-        logAnalysisRun({
-          url: params.url || undefined,
-          analysisType,
-          keySource,
-          processingTimeMs: Date.now() - startTime,
-          status: 'failed',
-          errorStep: 'extract',
-          errorMessage: message,
-        })
+        trackEvent('analysis_failed', { failure_step: 'extract' })
         return
       }
 
-      // Step 2: Enrich entities in batches
+      let enrichedEntities: EnrichResult['enrichedEntities'] = []
+      let enrichmentStatus: EnrichResult['cacheStatus'] = { hits: 0, misses: 0 }
       try {
-        const batches = batchArray<RawEntity>(
-          extractResult.entities,
-          ENRICH_BATCH_SIZE
-        )
         setStep('enriching')
-        setEnrichProgress({ current: 0, total: batches.length })
-
-        for (let i = 0; i < batches.length; i++) {
-          const batchResult = await postJson<EnrichResult>(
-            '/api/analyze/enrich',
-            {
-              entities: batches[i],
-              mainTopic: extractResult.mainTopic,
-              htmlContent: extractResult.textParts.htmlContent,
-            },
-            apiHeaders
-          )
-          enrichedEntities = [
-            ...enrichedEntities,
-            ...batchResult.enrichedEntities,
-          ]
-          setEnrichProgress({ current: i + 1, total: batches.length })
-        }
-
-        partialRef.current.entities = enrichedEntities
-      } catch (err) {
+        setEnrichProgress({ current: 0, total: 1 })
+        const enriched = await postJson<EnrichResult>(
+          '/api/analyze/enrich',
+          {
+            entities: extractResult.entities,
+            mainTopic: extractResult.mainTopic,
+            htmlContent: extractResult.textParts.htmlContent,
+            contentHash: extractResult.contentHash,
+            analysisRunId: extractResult.analysisRunId,
+          },
+          apiHeaders
+        )
+        enrichedEntities = enriched.enrichedEntities
+        enrichmentStatus = enriched.cacheStatus
+        setEnrichProgress({ current: 1, total: 1 })
+      } catch (enrichError) {
+        const message = enrichError instanceof Error
+          ? enrichError.message
+          : 'Entity enrichment failed'
         setStep('error')
-        const message =
-          err instanceof Error ? err.message : 'Entity enrichment failed'
         setError(message)
-        logAnalysisRun({
-          url: params.url || undefined,
-          analysisType,
-          keySource,
+        trackEvent('analysis_failed', { failure_step: 'enrich' })
+        finalizeRun({
+          analysisRunId: extractResult.analysisRunId,
+          status: 'failed',
           entitiesFound: enrichedEntities.length,
           processingTimeMs: Date.now() - startTime,
-          status: 'failed',
           errorStep: 'enrich',
           errorMessage: message,
-          ...sumUsage([extractResult.usage]),
         })
-        // Preserve partial entities
-        if (enrichedEntities.length > 0) {
-          setResult({
-            entities: enrichedEntities,
-            jsonLd: {},
-            recommendations: [],
-            topicalSalience: { score: 0, mainTopic: extractResult.mainTopic },
-            salienceTips: [],
-            irrelevantEntities: [],
-            processingTimeMs: Date.now() - startTime,
-            cached: extractResult.cached ?? false,
-          })
-        }
         return
       }
 
-      // Step 3: Generate JSON-LD + recommendations (skip if fanoutOnly)
-      if (!params.fanoutOnly) {
-        try {
-          setStep('generating')
-          generateResult = await postJson<GenerateResult>(
-            '/api/analyze/generate',
-            {
-              enrichedEntities,
-              textParts: extractResult.textParts,
-              mainTopic: extractResult.mainTopic,
-              url: params.url,
-            },
-            apiHeaders
-          )
-          partialRef.current = {
-            ...partialRef.current,
-            jsonLd: generateResult.jsonLd,
-            recommendations: generateResult.recommendations,
-            topicalSalience: { score: generateResult.topicalSalience, mainTopic: extractResult.mainTopic },
-            salienceTips: generateResult.salienceTips,
-            irrelevantEntities: generateResult.irrelevantEntities,
-          }
-        } catch (err) {
-          setStep('error')
-          const message =
-            err instanceof Error ? err.message : 'Schema generation failed'
-          setError(message)
-          logAnalysisRun({
-            url: params.url || undefined,
-            analysisType,
-            keySource,
-            entitiesFound: enrichedEntities.length,
-            processingTimeMs: Date.now() - startTime,
-            status: 'failed',
-            errorStep: 'generate',
-            errorMessage: message,
-            ...sumUsage([extractResult.usage]),
-          })
-          // Preserve partial results
-          setResult({
-            entities: enrichedEntities,
-            jsonLd: {},
-            recommendations: [],
-            topicalSalience: { score: 0, mainTopic: extractResult.mainTopic },
-            salienceTips: [],
-            irrelevantEntities: [],
-            processingTimeMs: Date.now() - startTime,
-            cached: extractResult.cached ?? false,
-          })
-          return
-        }
+      let generated: GenerateResult
+      try {
+        setStep('generating')
+        generated = await postJson<GenerateResult>(
+          '/api/analyze/generate',
+          {
+            enrichedEntities,
+            textParts: extractResult.textParts,
+            mainTopic: extractResult.mainTopic,
+            topicConfidence: extractResult.mainTopicConfidence,
+            url: params.mode === 'url' ? params.url : '',
+            contentHash: extractResult.contentHash,
+            analysisRunId: extractResult.analysisRunId,
+          },
+          apiHeaders
+        )
+      } catch (generateError) {
+        const message = generateError instanceof Error
+          ? generateError.message
+          : 'Schema generation failed'
+        setStep('error')
+        setError(message)
+        trackEvent('analysis_failed', { failure_step: 'generate' })
+        finalizeRun({
+          analysisRunId: extractResult.analysisRunId,
+          status: 'failed',
+          entitiesFound: enrichedEntities.length,
+          processingTimeMs: Date.now() - startTime,
+          errorStep: 'generate',
+          errorMessage: message,
+        })
+        return
       }
 
-      // Step 4: Fan-out analysis (optional)
+      let fanoutResult: FanoutResult | undefined
       if (params.runFanout) {
         try {
           setStep('fanout')
@@ -333,67 +181,71 @@ export function useAnalysis() {
             '/api/analyze/fanout',
             {
               htmlContent: extractResult.textParts.htmlContent,
-              url: params.url,
+              url: params.mode === 'url' ? params.url : undefined,
               contentHash: extractResult.contentHash,
               clearCache: params.clearCache,
+              analysisRunId: extractResult.analysisRunId,
             },
             apiHeaders
           )
-        } catch (err) {
-          // Fan-out is optional - don't fail the whole analysis
-          console.warn('Fan-out analysis failed:', err)
+          if (fanoutResult.error) trackEvent('query_coverage_unavailable')
+        } catch (fanoutError) {
+          fanoutResult = {
+            analysis: null,
+            chunksExtracted: 0,
+            chunks: [],
+            error: fanoutError instanceof Error
+              ? fanoutError.message
+              : 'AI Query Coverage was unavailable.',
+          }
+          trackEvent('query_coverage_unavailable')
         }
       }
 
-      // Combine results
       const processingTimeMs = Date.now() - startTime
       const combined: AnalysisResult = {
         entities: enrichedEntities,
-        jsonLd: generateResult?.jsonLd ?? {},
-        recommendations: generateResult?.recommendations ?? [],
-        topicalSalience: {
-          score: generateResult?.topicalSalience ?? 0,
-          mainTopic: extractResult.mainTopic,
-        },
-        salienceTips: generateResult?.salienceTips ?? [],
-        irrelevantEntities: generateResult?.irrelevantEntities ?? [],
+        schemaArtifact: generated.schemaArtifact,
+        recommendations: generated.recommendations,
+        clarity: generated.clarity,
         fanoutAnalysis: fanoutResult,
         processingTimeMs,
-        cached: extractResult.cached ?? false,
+        source: {
+          mode: params.mode,
+          url: params.mode === 'url' ? params.url : undefined,
+        },
+        analyzedAt: new Date().toISOString(),
+        provenance: {
+          fetch: extractResult.cacheStatus.fetch,
+          extraction: extractResult.cacheStatus.extraction,
+          enrichment: enrichmentStatus,
+          recommendations: generated.recommendationMode,
+        },
       }
 
       setResult(combined)
       setStep('complete')
-
-      // Audit log (fire-and-forget). Logs the real URL against the signed-in
-      // user's id so follow-ups are possible. Anon BYOK users get user_id=null.
-      logAnalysisRun({
-        url: params.url || undefined,
-        analysisType,
-        keySource,
-        entitiesFound: combined.entities.length,
-        processingTimeMs,
-        status: 'complete',
-        result: combined,
-        ...sumUsage([
-          extractResult.usage,
-          generateResult?.usage,
-          fanoutResult?.usage,
-        ]),
+      trackEvent('analysis_completed', {
+        clarity_status: generated.clarity.overallStatus,
+        schema_status: generated.schemaArtifact.status,
+        recommendation_mode: generated.recommendationMode,
+        query_coverage_requested: params.runFanout,
       })
-
-      // Tier 4 write-through: fire-and-forget persist of the combined
-      // result to analysis_cache. URL mode only. Happens even when
-      // clearCache was true so the cache stays warm.
-      if (params.mode === 'url' && params.url) {
-        fetch('/api/analyze/cache-store', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: params.url, result: combined }),
-        }).catch(() => {})
+      if (params.runFanout && fanoutResult?.analysis) {
+        trackEvent('query_coverage_completed', {
+          covered: fanoutResult.analysis.summary.covered,
+          partial: fanoutResult.analysis.summary.partial,
+          missing: fanoutResult.analysis.summary.missing,
+        })
       }
+      finalizeRun({
+        analysisRunId: extractResult.analysisRunId,
+        status: 'complete',
+        entitiesFound: enrichedEntities.length,
+        processingTimeMs,
+      })
     },
-    [logAnalysisRun]
+    [finalizeRun]
   )
 
   return { step, result, error, enrichProgress, analyze, reset }

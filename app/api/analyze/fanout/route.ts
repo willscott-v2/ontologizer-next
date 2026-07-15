@@ -1,94 +1,69 @@
-/**
- * POST /api/analyze/fanout
- *
- * Accepts HTML content + a content hash and optional URL, runs
- * Gemini-powered fan-out analysis to predict how Google's AI Mode might
- * decompose queries.
- *
- * Cached in fanout_cache (1hr TTL) keyed by contentHash. Cache read is
- * skipped when body.clearCache === true; cache write still happens.
- *
- * Headers:
- *   X-Gemini-Key (optional) - BYOK Gemini API key
- *
- * Body:
- *   { htmlContent, contentHash, url?, clearCache? }
- */
-
 import { NextRequest, NextResponse } from 'next/server';
-import type { FanoutResult } from '../../../../lib/types/analysis';
-import { analyzeFanout } from '../../../../lib/pipeline/fanout-analyzer';
-import { hashContent } from '@/lib/pipeline/fetcher';
+import { analyzeFanout } from '@/lib/pipeline/fanout-analyzer';
 import { getCachedFanout, cacheFanout } from '@/lib/cache/fanout-cache';
 import { createClient } from '@/lib/supabase/server';
-
-interface FanoutRequestBody {
-  htmlContent: string;
-  url?: string;
-  contentHash?: string;
-  clearCache?: boolean;
-}
+import { authorizeAnalysisStep, completeAnalysisStep } from '@/lib/analysis/run-store';
+import { fanoutRequestSchema, formatZodError } from '@/lib/analysis/request-schemas';
+import { queryCoverageCacheKey } from '@/lib/analysis/cache-keys';
+import type { FanoutResult } from '@/lib/types/analysis';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as FanoutRequestBody;
-    const { htmlContent, url } = body;
-    const clearCache = !!body.clearCache;
-
-    if (!htmlContent) {
-      return NextResponse.json(
-        { error: 'Missing required field: htmlContent' },
-        { status: 400 },
-      );
+    const parsed = fanoutRequestSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 });
+    }
+    const body = parsed.data;
+    const byokGeminiKey = request.headers.get('X-Gemini-Key') || undefined;
+    const supabase = await createClient();
+    const user = (await supabase.auth.getUser()).data.user;
+    const authorization = await authorizeAnalysisStep({
+      analysisRunId: body.analysisRunId,
+      contentHash: body.contentHash,
+      step: 'fanout',
+      user,
+      hasByokKey: Boolean(byokGeminiKey),
+    });
+    if (!authorization.allowed) {
+      return NextResponse.json({ error: authorization.reason }, { status: 403 });
     }
 
-    // Prefer caller-provided hash (from extract step). Fall back to local
-    // hash of htmlContent if the caller didn't pass one.
-    const contentHash = body.contentHash || hashContent(htmlContent);
-
-    // Cache read
-    if (!clearCache) {
-      const cached = await getCachedFanout(contentHash);
+    const cacheHash = queryCoverageCacheKey(body.contentHash);
+    if (!body.clearCache) {
+      const cached = await getCachedFanout(cacheHash);
       if (cached) {
-        return NextResponse.json(cached);
+        await completeAnalysisStep({ analysisRunId: body.analysisRunId, step: 'fanout' });
+        return NextResponse.json({ ...cached, cacheStatus: 'cached' });
       }
     }
 
-    let geminiKey = request.headers.get('X-Gemini-Key') || undefined;
-
-    // Signed-in users fall back to the app's Gemini key
-    if (!geminiKey) {
-      const supabase = await createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        geminiKey = process.env.GEMINI_API_KEY || undefined;
-      }
-    }
-
+    const geminiKey = byokGeminiKey || (user ? process.env.GEMINI_API_KEY : undefined);
     if (!geminiKey) {
       const result: FanoutResult = {
         analysis: null,
         chunksExtracted: 0,
         chunks: [],
-        error:
-          'Gemini API key required — add one in Settings, or sign in to use the free tier.',
+        error: 'AI Query Coverage needs a Gemini API key. Add one in Settings or sign in for the free tier.',
       };
-      return NextResponse.json(result, { status: 200 });
+      return NextResponse.json(result);
     }
 
-    const result = await analyzeFanout(htmlContent, url, geminiKey);
-
-    // Write to cache only when the call actually produced an analysis.
-    // Don't poison the cache with transient errors. Usage is stripped so a
-    // later cache hit doesn't re-report tokens that were never spent.
+    const result = await analyzeFanout(body.htmlContent, body.url, geminiKey);
+    result.cacheStatus = 'fresh';
     if (result.analysis && !result.error) {
-      const { usage: _usage, ...cacheable } = result;
-      cacheFanout(contentHash, cacheable).catch(() => {});
+      const cacheable: FanoutResult = { ...result, usage: undefined };
+      await cacheFanout(cacheHash, cacheable);
     }
-
+    await completeAnalysisStep({
+      analysisRunId: body.analysisRunId,
+      step: 'fanout',
+      geminiInputTokens: result.usage?.inputTokens,
+      geminiOutputTokens: result.usage?.outputTokens,
+      geminiCostUsd: result.usage?.costUsd,
+    });
     return NextResponse.json(result);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

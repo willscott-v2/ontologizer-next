@@ -21,15 +21,17 @@ export function useApiKeys() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setKeys(JSON.parse(stored));
+    queueMicrotask(() => {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          setKeys(JSON.parse(stored));
+        }
+      } catch {
+        // localStorage not available or corrupted
       }
-    } catch {
-      // localStorage not available or corrupted
-    }
-    setLoaded(true);
+      setLoaded(true);
+    });
   }, []);
 
   const saveKeys = useCallback((newKeys: ApiKeys) => {
@@ -50,7 +52,7 @@ export function useApiKeys() {
     }
   }, []);
 
-  const hasAnyKey = keys.openaiKey || keys.googleKgKey || keys.geminiKey;
+  const hasAnyKey = Boolean(keys.openaiKey || keys.googleKgKey || keys.geminiKey);
 
   // Headers to send with API requests
   const apiHeaders: Record<string, string> = {};

@@ -154,7 +154,7 @@ export function buildAboutEntities(
     const sameAs: string[] = [];
     if (entity.wikipediaUrl) sameAs.push(entity.wikipediaUrl);
     if (entity.wikidataUrl) sameAs.push(entity.wikidataUrl);
-    if (entity.googleKgUrl) sameAs.push(entity.googleKgUrl);
+    if (entity.googleKgUrl?.includes('kgmid=')) sameAs.push(entity.googleKgUrl);
     if (entity.linkedinUrl) sameAs.push(entity.linkedinUrl);
 
     // Use the specific entity type (Person, Organization, etc.) so consumers
@@ -191,7 +191,7 @@ export function buildKnowsAbout(
   return relevant.slice(0, maxItems).map((entity) => {
     const sameAs: string[] = [];
     if (entity.wikipediaUrl) sameAs.push(entity.wikipediaUrl);
-    if (entity.googleKgUrl) sameAs.push(entity.googleKgUrl);
+    if (entity.googleKgUrl?.includes('kgmid=')) sameAs.push(entity.googleKgUrl);
 
     const thing: Record<string, unknown> = {
       '@type': 'Thing',

@@ -57,6 +57,14 @@ const MAIN_CONTENT_SELECTORS = [
   '.content',
 ];
 
+function readableElementText($: cheerio.CheerioAPI, element: cheerio.Cheerio<import('domhandler').AnyNode>): string {
+  const blocks = element.find('h1, h2, h3, h4, h5, h6, p, li, dt, dd, blockquote, figcaption')
+    .toArray()
+    .map((node) => $(node).text().trim())
+    .filter(Boolean);
+  return (blocks.length > 0 ? blocks.join(' ') : element.text()).trim();
+}
+
 /**
  * Extract headings (h1-h3) from the loaded cheerio document.
  * Returns them in document order with their level.
@@ -107,7 +115,7 @@ export function extractTextFromHtml(html: string): TextParts {
 
   for (const selector of MAIN_CONTENT_SELECTORS) {
     $(selector).each((_i, el) => {
-      const text = $(el).text().trim();
+      const text = readableElementText($, $(el));
       if (text.length > bestLength) {
         bestLength = text.length;
         bestText = text;
@@ -117,7 +125,7 @@ export function extractTextFromHtml(html: string): TextParts {
 
   // Fallback to entire <body> if no main-content area matched
   if (!bestText) {
-    bestText = $('body').text().trim();
+    bestText = readableElementText($, $('body'));
   }
 
   // Clean up whitespace (collapse runs of whitespace to a single space)

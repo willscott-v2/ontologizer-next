@@ -1,6 +1,6 @@
 # Ontologizer
 
-Extract named entities from webpages, enrich them with structured data from Wikipedia/Wikidata/Knowledge Graph/ProductOntology, generate JSON-LD schema markup, and get SEO recommendations. Includes AI-powered fan-out query analysis via Google Gemini.
+Analyze a webpage or pasted content for topic focus, entity clarity, semantic coherence, and answer structure. Ontologizer also creates a connected JSON-LD artifact, evidence-backed recommendations, and optional modeled AI Query Coverage.
 
 ## Quick Start
 
@@ -12,10 +12,7 @@ npm install
 cp .env.local.example .env.local
 # Edit .env.local with your Supabase and API keys
 
-# 3. Set up database — run these in your Supabase SQL Editor, in order:
-#    - supabase/migrations/001_initial_schema.sql
-#    - supabase/migrations/002_ontologizer_next.sql (optional; only if migrating
-#      from an older ontologizer-app schema)
+# 3. Set up the database by applying supabase/migrations/001 through 008 in order.
 
 # 4. Start dev server
 npm run dev
@@ -25,11 +22,12 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Features
 
-- **Entity Extraction** - OpenAI GPT-4o identifies named entities (people, orgs, places, products) with regex fallback
-- **Multi-Source Enrichment** - Each entity enriched via Wikipedia, Wikidata, Google Knowledge Graph, and ProductOntology in parallel
-- **JSON-LD Generation** - Schema.org markup for WebPage, Article, Service, LocalBusiness, EducationalProgram, FAQ, HowTo
-- **SEO Recommendations** - AI-powered content optimization suggestions with topical salience scoring
-- **Fan-out Analysis** - Gemini 2.5 predicts how Google AI might decompose queries about your content, with per-query coverage scoring
+- **AI Content Clarity** - Evidence-backed Topic Focus, Entity Clarity, Semantic Coherence, and Answer Structure findings without an unexplained aggregate score
+- **Entity Extraction and Enrichment** - Named entities with contextual Wikipedia, Wikidata, and Knowledge Graph references when verified
+- **Connected JSON-LD** - A linked Schema.org `@graph` with page-type evidence, validation findings, and Ready, Review, or Insufficient status
+- **Recommendations** - Prioritized actions tied to visible page evidence
+- **AI Query Coverage** - Optional modeled adjacent questions and page-coverage checks; this is not observed Google or Search Console query data
+- **Branded Markdown Export** - Ungated report with source, timestamp, version, confidence, schema, and Search Influence attribution
 - **LinkedIn resolution** - For person entities, scans the source page for matching LinkedIn profile links
 - **BYOK** - Bring your own API keys for unlimited use, or sign up (magic link) for 5 free analyses/month
 
@@ -46,17 +44,17 @@ Clone this repo, set up a [Supabase](https://supabase.com) project (free tier wo
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key (for caching/metering) |
 | `OPENAI_API_KEY` | For free tier | OpenAI key for entity extraction + SEO recs |
 | `GOOGLE_KG_API_KEY` | For free tier | Google Knowledge Graph key for enrichment |
-| `GEMINI_API_KEY` | For free tier | Google Gemini key for fan-out analysis |
+| `GEMINI_API_KEY` | For free tier | Google Gemini key for optional AI Query Coverage |
 
 Users who bring their own keys don't consume your API quota.
 
 ### Database Setup
 
-Run `supabase/migrations/001_initial_schema.sql` in your Supabase SQL Editor. This creates:
+Apply every migration in `supabase/migrations` in numeric order. These create and update:
 - User profiles with free-tier metering
 - Entity enrichment cache (7-day TTL)
-- Analysis result cache (1-hour TTL)
-- Usage logging
+- Server-owned analysis-run lifecycle and step authorization
+- Usage, status, token, and cost logging
 
 ## Reusable Components
 
@@ -79,11 +77,11 @@ Client (useAnalysis hook)
   │
   ├─ POST /api/analyze/extract    → Fetch URL, parse HTML, extract entities
   ├─ POST /api/analyze/enrich     → Batch enrichment (Wikipedia, Wikidata, KG, ProductOntology)
-  ├─ POST /api/analyze/generate   → JSON-LD schema + SEO recommendations + salience score
-  └─ POST /api/analyze/fanout     → Gemini fan-out analysis (optional)
+  ├─ POST /api/analyze/generate   → Clarity, connected schema, and recommendations
+  └─ POST /api/analyze/fanout     → Modeled AI Query Coverage (optional)
 ```
 
-Entity enrichment runs fully in parallel (not sequential like the original PHP version), dropping enrichment time from ~60-120s to ~5-10s per batch.
+The public full-result cache routes are intentionally absent. Server-owned derived caches remain versioned, while each downstream provider step is authorized against an expiring analysis run.
 
 ## License
 

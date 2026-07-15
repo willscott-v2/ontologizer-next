@@ -74,7 +74,7 @@ export default function SettingsPage() {
   const [draft, setDraft] = useState(keys);
 
   useEffect(() => {
-    if (loaded) setDraft(keys);
+    if (loaded) queueMicrotask(() => setDraft(keys));
   }, [loaded, keys]);
 
   function handleSave() {
@@ -104,9 +104,9 @@ export default function SettingsPage() {
 
           <div>
             <h1 className="text-2xl font-bold text-white">API Keys</h1>
-            <p className="text-white/70">
+            <p className="text-white/90">
               Add your own API keys to use Ontologizer without limits.
-              Keys are stored in your browser only and sent directly to the APIs.
+              Keys are stored in your browser, forwarded through Ontologizer only for the provider calls you request, and are not persisted by the app.
             </p>
           </div>
 
@@ -146,7 +146,7 @@ export default function SettingsPage() {
           <KeyInput
             id="gemini"
             label="Google Gemini API Key"
-            description="Used for the fan-out query analysis feature. Required for fan-out only."
+            description="Used for optional AI Query Coverage. It models adjacent questions and checks them against page evidence."
             helpUrl="https://aistudio.google.com/app/apikey"
             helpLabel="Get a Gemini key"
             value={draft.geminiKey}

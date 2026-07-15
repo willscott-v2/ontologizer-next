@@ -11,7 +11,7 @@ export function Header() {
   return (
     <header className="si-header">
       <div className="si-container">
-        <div className="flex items-center justify-between mb-8">
+        <div className="header-top flex items-center justify-between mb-8">
           <a
             href="https://www.searchinfluence.com"
             target="_blank"
@@ -28,7 +28,7 @@ export function Header() {
             />
           </a>
 
-          <nav className="flex items-center gap-3 text-white/90 text-sm">
+          <nav aria-label="Utility navigation" className="header-nav flex items-center gap-3 text-white/90 text-sm">
             <Link
               href="/settings"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-white/10 transition-colors"
@@ -51,7 +51,7 @@ export function Header() {
               <>
                 {user ? (
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 text-white/80">
+                    <span className="header-user inline-flex items-center gap-1 text-white/80">
                       <User className="h-3.5 w-3.5" />
                       {user.email?.split('@')[0]}
                     </span>
@@ -80,12 +80,11 @@ export function Header() {
 
         <div className="header-content">
           <div className="logo-section">
-            <h1>Ontologizer</h1>
-            <p className="tagline">Entity extraction & schema markup</p>
+            <h1>Ontologizer: AI Content Clarity Analyzer</h1>
+            <p className="tagline">See what your page communicates clearly, and what needs work.</p>
             <p className="header-description">
-              Extract named entities from any webpage, enrich with Wikipedia,
-              Wikidata &amp; Knowledge Graph, and generate production-ready
-              JSON-LD schema — with SEO recommendations baked in.
+              Review topic focus, entity clarity, semantic coherence, answer
+              structure, and connected JSON-LD in one evidence-backed report.
             </p>
           </div>
         </div>

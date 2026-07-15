@@ -1,75 +1,66 @@
-/**
- * POST /api/analyze/enrich
- *
- * Accepts a batch of raw entities + mainTopic, runs parallel enrichment
- * against Wikipedia, Wikidata, Google KG, and ProductOntology,
- * and returns an EnrichResult.
- */
-
 import { NextResponse, type NextRequest } from 'next/server';
 import { enrichEntities } from '@/lib/pipeline/enricher';
 import { findLinkedInFromHtml } from '@/lib/pipeline/enricher/linkedin';
 import { getCachedEntities, cacheEntities } from '@/lib/cache/entity-cache';
-import type { RawEntity, EnrichedEntity } from '@/lib/types/entities';
+import { createClient } from '@/lib/supabase/server';
+import { authorizeAnalysisStep, completeAnalysisStep } from '@/lib/analysis/run-store';
+import { enrichRequestSchema, formatZodError } from '@/lib/analysis/request-schemas';
+import type { EnrichedEntity } from '@/lib/types/entities';
 import type { EnrichResult } from '@/lib/types/analysis';
-
-interface EnrichRequestBody {
-  entities: RawEntity[];
-  mainTopic: string;
-  htmlContent?: string;
-}
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as EnrichRequestBody;
-
-    if (!Array.isArray(body.entities) || body.entities.length === 0) {
-      return NextResponse.json(
-        { error: 'Provide a non-empty "entities" array.' },
-        { status: 400 },
-      );
+    const parsed = enrichRequestSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 });
+    }
+    const body = parsed.data;
+    const byokGoogleKey = request.headers.get('X-Google-KG-Key') || undefined;
+    const supabase = await createClient();
+    const user = (await supabase.auth.getUser()).data.user;
+    const authorization = await authorizeAnalysisStep({
+      analysisRunId: body.analysisRunId,
+      contentHash: body.contentHash,
+      step: 'enrich',
+      user,
+      hasByokKey: Boolean(byokGoogleKey),
+    });
+    if (!authorization.allowed) {
+      return NextResponse.json({ error: authorization.reason }, { status: 403 });
     }
 
-    // BYOK: read Google KG key from header or fall back to env var
-    const googleKgKey =
-      request.headers.get('X-Google-KG-Key') ??
-      process.env.GOOGLE_KG_API_KEY ??
-      undefined;
-
+    const googleKgKey = byokGoogleKey || (user ? process.env.GOOGLE_KG_API_KEY : undefined);
     const startTime = Date.now();
-
-    // Check entity cache for already-enriched entities
-    const entityNames = body.entities.map((e) => e.name);
-    const cached = await getCachedEntities(entityNames);
-
+    const entityNames = body.entities.map((entity) => entity.name);
+    const cached = await getCachedEntities(entityNames, body.mainTopic);
     const uncachedEntities = body.entities.filter(
-      (e) => !cached.has(e.name.toLowerCase())
+      (entity) => !cached.has(entity.name.toLowerCase()),
     );
 
-    // Enrich only cache misses
     let freshlyEnriched: EnrichedEntity[] = [];
     if (uncachedEntities.length > 0) {
-      freshlyEnriched = await enrichEntities(
-        uncachedEntities,
-        body.mainTopic ?? '',
-        { googleKg: googleKgKey },
-      );
-
-      // Write new enrichments to cache (fire and forget)
-      cacheEntities(freshlyEnriched).catch(() => {});
+      freshlyEnriched = await enrichEntities(uncachedEntities, body.mainTopic, {
+        googleKg: googleKgKey,
+      });
+      await cacheEntities(freshlyEnriched, body.mainTopic);
     }
 
-    // Combine cached + fresh, preserving original order
-    const enrichedEntities = body.entities.map((e) => {
-      const fromCache = cached.get(e.name.toLowerCase());
+    const enrichedEntities = body.entities.map((entity) => {
+      const fromCache = cached.get(entity.name.toLowerCase());
       if (fromCache) return fromCache;
       return freshlyEnriched.find(
-        (f) => f.name.toLowerCase() === e.name.toLowerCase()
-      ) ?? { name: e.name, type: 'Thing' as const, confidenceScore: 0, wikipediaUrl: null, wikidataUrl: null, googleKgUrl: null, productOntologyUrl: null };
+        (candidate) => candidate.name.toLowerCase() === entity.name.toLowerCase(),
+      ) ?? {
+        name: entity.name,
+        type: 'Thing' as const,
+        confidenceScore: 0,
+        wikipediaUrl: null,
+        wikidataUrl: null,
+        googleKgUrl: null,
+        productOntologyUrl: null,
+      };
     });
 
-    // Attach page-scoped LinkedIn URLs for person entities (not cached since
-    // the match is specific to the source page's link graph)
     if (body.htmlContent) {
       for (const entity of enrichedEntities) {
         if (entity.type === 'Person') {
@@ -78,15 +69,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    await completeAnalysisStep({ analysisRunId: body.analysisRunId, step: 'enrich' });
     const result: EnrichResult = {
       enrichedEntities,
       processingTimeMs: Date.now() - startTime,
+      cacheStatus: {
+        hits: cached.size,
+        misses: uncachedEntities.length,
+      },
+      googleKnowledgeGraph: googleKgKey ? 'queried' : 'not_configured',
     };
-
     return NextResponse.json(result);
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : 'Internal server error';
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

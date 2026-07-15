@@ -17,7 +17,7 @@ const STEPS: StepDef[] = [
   { key: 'extracting', label: 'Extract' },
   { key: 'enriching', label: 'Enrich' },
   { key: 'generating', label: 'Generate' },
-  { key: 'fanout', label: 'Fan-out' },
+  { key: 'fanout', label: 'Query Coverage' },
 ]
 
 const STEP_ORDER: AnalysisStep[] = [

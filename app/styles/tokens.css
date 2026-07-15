@@ -41,7 +41,7 @@
   --content-bg: #ffffff;
   --content-text: #17374a;
   --secondary-content: #2f5064;
-  --muted-text: #7f8c8d;
+  --muted-text: #57666f;
   --border-gray: #d7e1e8;
   --background-gray: #f3f5f7;
   --surface-slate: #405466;
@@ -70,7 +70,7 @@
   --popover: var(--content-bg);
   --popover-foreground: var(--content-text);
   --primary: var(--si-orange);
-  --primary-foreground: var(--white);
+  --primary-foreground: var(--si-dark-navy);
   --secondary: var(--si-slate);
   --secondary-foreground: var(--white);
   --muted: var(--background-gray);
@@ -91,7 +91,7 @@
   --sidebar: var(--si-slate);
   --sidebar-foreground: var(--white);
   --sidebar-primary: var(--si-orange);
-  --sidebar-primary-foreground: var(--white);
+  --sidebar-primary-foreground: var(--si-dark-navy);
   --sidebar-accent: var(--si-slate-light);
   --sidebar-accent-foreground: var(--white);
   --sidebar-border: rgba(255, 255, 255, 0.14);
@@ -106,7 +106,7 @@
   --popover: var(--content-bg);
   --popover-foreground: var(--content-text);
   --primary: var(--si-orange);
-  --primary-foreground: var(--white);
+  --primary-foreground: var(--si-dark-navy);
   --secondary: var(--si-slate);
   --secondary-foreground: var(--white);
   --muted: var(--background-gray);
@@ -126,7 +126,7 @@
   --sidebar: var(--si-slate);
   --sidebar-foreground: var(--white);
   --sidebar-primary: var(--si-orange);
-  --sidebar-primary-foreground: var(--white);
+  --sidebar-primary-foreground: var(--si-dark-navy);
   --sidebar-accent: var(--si-slate-light);
   --sidebar-accent-foreground: var(--white);
   --sidebar-border: rgba(255, 255, 255, 0.14);

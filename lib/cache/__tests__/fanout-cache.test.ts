@@ -8,9 +8,21 @@ vi.mock('@supabase/supabase-js', () => ({
 }));
 
 const fixture: FanoutResult = {
-  analysis: 'Query: foo\nCoverage: Yes',
+  analysis: {
+    primaryEntity: 'OpenAI',
+    questions: Array.from({ length: 5 }, (_, index) => ({
+      question: `What should a reader know about OpenAI topic ${index + 1}?`,
+      intent: 'definition' as const,
+      coverage: 'covered' as const,
+      evidenceChunkIds: ['chunk-1'],
+      checkedScope: 'The primary topic chunk directly addresses this modeled question.',
+    })),
+    summary: { covered: 5, partial: 0, missing: 0 },
+    promptVersion: 'fanout-2',
+    disclosure: 'Modeled questions based on this page, not observed Google searches.',
+  },
   chunksExtracted: 4,
-  chunks: [{ type: 'section', heading: 'About', content: 'info' }],
+  chunks: [{ id: 'chunk-1', type: 'section', heading: 'About', content: 'info' }],
 };
 
 describe('fanout-cache', () => {

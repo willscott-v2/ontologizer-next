@@ -56,10 +56,6 @@ function calculateGoogleKgMatchScore(
   return Math.max(0, score);
 }
 
-function getGoogleSearchFallbackUrl(entity: string): string {
-  return `https://www.google.com/search?q=${encodeURIComponent(entity)}`;
-}
-
 function looksLikePersonName(name: string): boolean {
   return /^[A-Z][a-z]+(?:\s+[A-Z]\.?)?\s+[A-Z][a-z]+$/.test(name.trim());
 }
@@ -146,7 +142,7 @@ interface KgResponse {
 /**
  * Find the Google Knowledge Graph URL for an entity.
  * If an API key is provided, queries the KG Search API.
- * Otherwise falls back to a plain Google search URL.
+ * Returns null when no verified KGMID match is available.
  */
 export async function findGoogleKgUrl(
   entity: string,
@@ -200,6 +196,5 @@ export async function findGoogleKgUrl(
     }
   }
 
-  // Fallback to generic Google search
-  return getGoogleSearchFallbackUrl(entity);
+  return null;
 }

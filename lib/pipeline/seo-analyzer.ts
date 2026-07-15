@@ -1,253 +1,200 @@
-/**
- * SEO content analyzer with OpenAI-powered recommendations.
- * Ported from PHP analyze_content() + generate_seo_recommendations_openai()
- * (lines 2923-3100).
- */
-
+import { z } from 'zod';
 import type { EnrichedEntity } from '../types/entities';
-import type { TextParts, Recommendation, AiUsage } from '../types/analysis';
+import type {
+  AiUsage,
+  ClarityAssessment,
+  ClarityDimensionName,
+  Recommendation,
+  TextParts,
+} from '../types/analysis';
 import { computeCost } from '../pricing';
 
-// gpt-4o is deprecated (snapshots shut down starting 2026-10-23).
-// gpt-5.4-mini for prose-quality recommendations at ~60% less cost.
 const OPENAI_MODEL = 'gpt-5.4-mini';
+
+const recommendationSchema = z.object({
+  observation: z.string().min(10).max(240),
+  evidence: z.array(z.string().min(1).max(80)).min(1).max(4),
+  action: z.string().min(10).max(300),
+  priority: z.enum(['high', 'medium', 'low']),
+  effort: z.enum(['small', 'medium', 'large']),
+  confidence: z.enum(['high', 'medium', 'low']),
+  dimension: z.enum([
+    'topicFocus',
+    'entityClarity',
+    'semanticCoherence',
+    'answerStructure',
+    'schema',
+    'queryCoverage',
+  ]),
+}).strict();
+
+export const recommendationResponseSchema = z.object({
+  recommendations: z.array(recommendationSchema).min(1).max(8),
+}).strict();
 
 export interface ContentAnalysis {
   recommendations: Recommendation[];
-  /** Present only when OpenAI produced the recommendations. */
+  mode: 'ai' | 'deterministic';
   usage?: AiUsage;
 }
 
-/**
- * Analyze content and generate SEO recommendations.
- * Uses OpenAI when a key is provided, otherwise falls back to
- * basic heuristic recommendations.
- */
+const priorityRank = { high: 0, medium: 1, low: 2 } as const;
+const confidenceRank = { high: 0, medium: 1, low: 2 } as const;
+const effortRank = { small: 0, medium: 1, large: 2 } as const;
+
+export function sortAndDeduplicateRecommendations(
+  recommendations: Recommendation[],
+): Recommendation[] {
+  const seen = new Set<string>();
+  return [...recommendations]
+    .sort((a, b) =>
+      priorityRank[a.priority] - priorityRank[b.priority]
+      || confidenceRank[a.confidence] - confidenceRank[b.confidence]
+      || effortRank[a.effort] - effortRank[b.effort])
+    .filter((recommendation) => {
+      const signature = recommendation.action.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (seen.has(signature)) return false;
+      seen.add(signature);
+      return true;
+    });
+}
+
+const actions: Record<string, string> = {
+  'topic-in-title': 'Revise the page title so it clearly names the main topic while preserving the page’s specific value proposition.',
+  'topic-in-h1': 'Use one H1 that clearly names the page’s main topic and matches the page’s actual purpose.',
+  'topic-in-opening': 'Add a direct one- or two-sentence explanation of the main topic near the beginning of the page.',
+  'topic-in-supporting-headings': 'Rename one or more section headings so the outline shows how the sections support the main topic.',
+  'topic-repetition': 'Replace repeated exact-match phrasing with natural variants where the repetition does not add meaning.',
+  'primary-entity': 'Confirm the primary entity and add enough nearby context to distinguish it from people, places, or brands with similar names.',
+  'entity-type': 'Identify the primary entity with a more specific type such as Person, Organization, Service, Product, or Place.',
+  'entity-name-consistency': 'Use a consistent primary name and make aliases explicit the first time they appear.',
+  'entity-page-support': 'Review entities without visible page support and correct extraction errors or add missing context where the entity is genuinely relevant.',
+  'unsupported-entity-review': 'Review the flagged entities as aliases, examples, comparisons, or extraction noise before changing the page copy.',
+  'single-h1': 'Keep one page-level H1 and demote additional top-level headings to the appropriate section level.',
+  'heading-order': 'Adjust heading levels so the outline does not skip from one level to a much deeper level.',
+  'direct-introduction': 'Open with a concise explanation that answers what the page is about and who it is for.',
+  'scannable-facts': 'Turn appropriate facts, steps, requirements, or options into a visible list or definition list.',
+  'readable-html': 'Ensure the main content is present in the server-rendered HTML or provide an equivalent crawlable rendering.',
+};
+
+export function generateDeterministicRecommendations(
+  clarity: ClarityAssessment,
+): Recommendation[] {
+  const recommendations: Recommendation[] = [];
+  for (const [dimension, assessment] of Object.entries(clarity.dimensions) as Array<
+    [ClarityDimensionName, ClarityAssessment['dimensions'][ClarityDimensionName]]
+  >) {
+    for (const check of assessment.checks) {
+      if (!['fail', 'review'].includes(check.status)) continue;
+      const action = actions[check.id];
+      if (!action) continue;
+      recommendations.push({
+        observation: check.detail,
+        evidence: check.evidenceIds,
+        action,
+        priority: check.status === 'fail' ? 'high' : 'medium',
+        effort: ['readable-html', 'entity-page-support'].includes(check.id) ? 'large' : 'small',
+        confidence: check.evidenceIds.length > 0 ? 'high' : 'medium',
+        dimension,
+      });
+    }
+  }
+  return sortAndDeduplicateRecommendations(recommendations).slice(0, 8);
+}
+
+function representativeContent(textParts: TextParts): string {
+  const body = textParts.body;
+  const chunkSize = 1_500;
+  const chunks = [
+    body.slice(0, chunkSize),
+    body.slice(Math.max(0, Math.floor(body.length / 2) - chunkSize / 2), Math.floor(body.length / 2) + chunkSize / 2),
+    body.slice(Math.max(0, body.length - chunkSize)),
+  ].map((chunk) => chunk.trim()).filter(Boolean);
+  return [...new Set(chunks)].join('\n\n[CONTENT CHUNK]\n');
+}
+
+function allEvidenceIds(clarity: ClarityAssessment): Set<string> {
+  return new Set(Object.values(clarity.dimensions)
+    .flatMap((dimension) => dimension.evidence.map((evidence) => evidence.id)));
+}
+
+function validateEvidenceReferences(
+  recommendations: Recommendation[],
+  clarity: ClarityAssessment,
+): Recommendation[] | null {
+  const validIds = allEvidenceIds(clarity);
+  if (recommendations.some((recommendation) =>
+    recommendation.evidence.some((id) => !validIds.has(id)))) {
+    return null;
+  }
+  return sortAndDeduplicateRecommendations(recommendations);
+}
+
 export async function analyzeContent(
   entities: EnrichedEntity[],
   textParts: TextParts,
   mainTopic: string,
+  clarity: ClarityAssessment,
   jsonLd?: Record<string, unknown>,
   openaiKey?: string,
 ): Promise<ContentAnalysis> {
-  if (openaiKey) {
-    try {
-      return await generateOpenAiRecommendations(
-        entities,
-        textParts,
-        jsonLd,
-        openaiKey,
-      );
-    } catch {
-      // Fall through to basic analysis on error
-    }
-  }
+  const fallback = generateDeterministicRecommendations(clarity);
+  if (!openaiKey) return { recommendations: fallback, mode: 'deterministic' };
 
-  return { recommendations: generateBasicRecommendations(entities, textParts) };
-}
+  try {
+    const { default: OpenAI } = await import('openai');
+    const client = new OpenAI({ apiKey: openaiKey });
+    const outline = textParts.headings.map((heading) => `${'#'.repeat(heading.level)} ${heading.text}`).join('\n');
+    const evidence = Object.entries(clarity.dimensions).flatMap(([dimension, assessment]) =>
+      assessment.evidence.map((item) => ({ dimension, ...item })));
+    const schemaTypes = Array.isArray(jsonLd?.['@graph'])
+      ? (jsonLd['@graph'] as Array<Record<string, unknown>>).map((node) => node['@type']).filter(Boolean)
+      : [jsonLd?.['@type']].filter(Boolean);
+    const prompt = `Review this page and return evidence-backed improvement recommendations as JSON.
 
-// ─── OpenAI-powered recommendations ────────────────────────────────────────
+Main topic: ${mainTopic}
+Entities: ${entities.map((entity) => `${entity.name} (${entity.type})`).join(', ')}
+Existing schema types: ${schemaTypes.join(', ') || 'none detected'}
 
-async function generateOpenAiRecommendations(
-  entities: EnrichedEntity[],
-  textParts: TextParts,
-  jsonLd: Record<string, unknown> | undefined,
-  apiKey: string,
-): Promise<ContentAnalysis> {
-  // Use dynamic import so the openai package is only loaded when needed
-  const { default: OpenAI } = await import('openai');
-  const client = new OpenAI({ apiKey });
+Page outline:
+${outline || 'No headings found'}
 
-  const topEntities = entities
-    .filter((e) => e.confidenceScore > 50)
-    .slice(0, 5);
-  const entityListStr = topEntities.map((e) => e.name).join(', ');
+Representative page content:
+${representativeContent(textParts)}
 
-  // Build context about already-implemented schema
-  const schemaContext = buildSchemaContext(jsonLd);
+Allowed evidence IDs:
+${JSON.stringify(evidence)}
 
-  const prompt = `You are a world-class Semantic SEO strategist, specializing in topical authority and schema optimization. Analyze the following webpage content and its most salient topical entities to provide expert, actionable recommendations for improving its semantic density and authority.
+Return 1-8 recommendations. Every evidence value must be an allowed evidence ID. Do not recommend keyword frequency, deleting content based only on lookup confidence, or schema already present. Use this exact contract:
+{"recommendations":[{"observation":"...","evidence":["evidence-id"],"action":"...","priority":"high|medium|low","effort":"small|medium|large","confidence":"high|medium|low","dimension":"topicFocus|entityClarity|semanticCoherence|answerStructure|schema"}]}`;
 
-**Page Text Summary:**
-${textParts.body.slice(0, 2500)}...
-
-**Most Salient Topical Entities Identified:**
-${entityListStr}${schemaContext}
-
-**Your Task:**
-Provide a structured set of recommendations in a JSON object format. The JSON object must contain a single key: \`recommendations\`. The value should be an array of objects, where each object has two keys: \`category\` (e.g., 'Semantic Gaps', 'Content Depth', 'Strategic Guidance') and \`advice\` (the specific recommendation string).
-
-Focus on content improvements, missing entity coverage, and advanced SEO strategies. Avoid recommending already-implemented structured data.
-
-Example:
-{
-  "recommendations": [
-    { "category": "Semantic Gaps", "advice": "Cover the topic of 'Voice Search Optimization' as it's highly relevant." },
-    { "category": "Content Depth", "advice": "Expand on 'Local SEO' by including case studies and FAQs." }
-  ]
-}
-
-Return *only* the raw JSON object, without any surrounding text, formatting, or explanations.`;
-
-  // gpt-5-series models reject max_tokens and non-default temperature.
-  const response = await client.chat.completions.create({
-    model: OPENAI_MODEL,
-    messages: [{ role: 'user', content: prompt }],
-    max_completion_tokens: 2000,
-    response_format: { type: 'json_object' },
-  });
-
-  let usage: AiUsage | undefined;
-  if (response.usage) {
-    const inputTokens = response.usage.prompt_tokens ?? 0;
-    const outputTokens = response.usage.completion_tokens ?? 0;
-    usage = {
-      provider: 'openai',
+    const response = await client.chat.completions.create({
       model: OPENAI_MODEL,
-      inputTokens,
-      outputTokens,
-      costUsd: computeCost(OPENAI_MODEL, inputTokens, outputTokens) ?? 0,
-    };
-  }
+      messages: [{ role: 'user', content: prompt }],
+      max_completion_tokens: 2_000,
+      response_format: { type: 'json_object' },
+    });
+    const content = response.choices[0]?.message?.content;
+    if (!content) return { recommendations: fallback, mode: 'deterministic' };
+    const parsed = recommendationResponseSchema.safeParse(JSON.parse(content));
+    if (!parsed.success) return { recommendations: fallback, mode: 'deterministic' };
+    const validated = validateEvidenceReferences(parsed.data.recommendations, clarity);
+    if (!validated) return { recommendations: fallback, mode: 'deterministic' };
 
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    return {
-      recommendations: generateBasicRecommendations(entities, textParts),
-      usage,
-    };
-  }
-
-  const parsed = JSON.parse(content);
-  if (
-    parsed.recommendations &&
-    Array.isArray(parsed.recommendations)
-  ) {
-    return { recommendations: parsed.recommendations as Recommendation[], usage };
-  }
-
-  return {
-    recommendations: generateBasicRecommendations(entities, textParts),
-    usage,
-  };
-}
-
-function buildSchemaContext(
-  jsonLd: Record<string, unknown> | undefined,
-): string {
-  if (!jsonLd) return '';
-
-  const implementedSchemas: string[] = [];
-  const implementedFeatures: string[] = [];
-
-  if (jsonLd['@type']) {
-    implementedSchemas.push(jsonLd['@type'] as string);
-  }
-
-  const mainEntity = jsonLd.mainEntity;
-  if (mainEntity && typeof mainEntity === 'object') {
-    if (Array.isArray(mainEntity)) {
-      for (const entity of mainEntity) {
-        if (entity['@type']) implementedSchemas.push(entity['@type'] as string);
-      }
-    } else if ((mainEntity as Record<string, unknown>)['@type']) {
-      implementedSchemas.push(
-        (mainEntity as Record<string, unknown>)['@type'] as string,
-      );
+    let usage: AiUsage | undefined;
+    if (response.usage) {
+      const inputTokens = response.usage.prompt_tokens ?? 0;
+      const outputTokens = response.usage.completion_tokens ?? 0;
+      usage = {
+        provider: 'openai',
+        model: OPENAI_MODEL,
+        inputTokens,
+        outputTokens,
+        costUsd: computeCost(OPENAI_MODEL, inputTokens, outputTokens) ?? 0,
+      };
     }
+    return { recommendations: validated.slice(0, 8), mode: 'ai', usage };
+  } catch {
+    return { recommendations: fallback, mode: 'deterministic' };
   }
-
-  if (jsonLd.hasPart) implementedFeatures.push('FAQ structured data');
-  if (jsonLd.speakable) implementedFeatures.push('Voice search optimization (speakable)');
-  if (jsonLd.provider) implementedFeatures.push('Provider/organization information');
-  if (jsonLd.knowsAbout) implementedFeatures.push('Knowledge domain specification');
-  if (jsonLd.sameAs) implementedFeatures.push('Entity linking (sameAs)');
-
-  if (implementedSchemas.length === 0 && implementedFeatures.length === 0) {
-    return '';
-  }
-
-  const parts: string[] = [];
-  if (implementedSchemas.length > 0) {
-    parts.push('Schema types: ' + [...new Set(implementedSchemas)].join(', '));
-  }
-  if (implementedFeatures.length > 0) {
-    parts.push('Features: ' + [...new Set(implementedFeatures)].join(', '));
-  }
-
-  return (
-    '\n\n**Already Implemented Structured Data:**\n' +
-    parts.join('\n') +
-    '\n\n**IMPORTANT:** Do NOT recommend implementing any of the above schema types or features as they are already active on this page.'
-  );
-}
-
-// ─── Basic heuristic recommendations (no API key) ──────────────────────────
-
-function generateBasicRecommendations(
-  entities: EnrichedEntity[],
-  textParts: TextParts,
-): Recommendation[] {
-  const recommendations: Recommendation[] = [];
-  const bodyLower = textParts.body.toLowerCase();
-
-  // Check entity coverage
-  for (const entity of entities) {
-    const count = countOccurrences(bodyLower, entity.name.toLowerCase());
-    if (count <= 1) {
-      recommendations.push({
-        category: 'Entity Coverage',
-        advice: `Consider expanding coverage of '${entity.name}' with additional context, examples, or data to build more topical authority.`,
-      });
-    }
-  }
-
-  // Check basic SEO elements
-  if (!textParts.title) {
-    recommendations.push({
-      category: 'Technical SEO',
-      advice: 'Add a descriptive page title that includes your primary topic.',
-    });
-  }
-
-  if (!textParts.description) {
-    recommendations.push({
-      category: 'Technical SEO',
-      advice: 'Add a meta description that summarizes the page content and includes key entities.',
-    });
-  }
-
-  const hasH1 = textParts.headings.some((h) => h.level === 1);
-  if (!hasH1) {
-    recommendations.push({
-      category: 'Content Structure',
-      advice: 'Add an H1 heading that clearly states the main topic of the page.',
-    });
-  }
-
-  if (entities.length < 3) {
-    recommendations.push({
-      category: 'Semantic Density',
-      advice: 'The page has few recognized entities. Add more specific, named concepts related to your topic to increase semantic richness.',
-    });
-  }
-
-  if (recommendations.length === 0) {
-    recommendations.push({
-      category: 'General',
-      advice: 'Content appears to have good entity coverage. Review the generated JSON-LD for inclusion in your page schema to improve SEO.',
-    });
-  }
-
-  return recommendations.slice(0, 5);
-}
-
-function countOccurrences(haystack: string, needle: string): number {
-  let count = 0;
-  let pos = 0;
-  while ((pos = haystack.indexOf(needle, pos)) !== -1) {
-    count++;
-    pos += needle.length;
-  }
-  return count;
 }

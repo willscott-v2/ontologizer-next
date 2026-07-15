@@ -6,13 +6,16 @@
 
 import type { EnrichedEntity } from '../../types/entities';
 import type { TextParts } from '../../types/analysis';
+import type { SchemaArtifact } from '../../types/analysis';
+import * as cheerio from 'cheerio';
 import { generateWebPageSchema } from './webpage';
 import { generateArticleSchema } from './article';
 import { generateServiceSchema } from './service';
 import { generateLocalBusinessSchema } from './local-business';
 import { generateEducationalSchema } from './educational';
+import { buildSchemaArtifact } from './artifact';
 
-type SchemaType =
+export type SchemaType =
   | 'Service'
   | 'LocalBusiness'
   | 'EducationalOccupationalProgram'
@@ -26,6 +29,7 @@ const SERVICE_PATTERNS = [
   /\b(service|services|solution|solutions|offering|offerings)\b/gi,
   /\b(assisted living|limo|limousine|transportation|chauffeur|car service)\b/gi,
   /\b(provider|support|assistance|consulting|agency)\b/gi,
+  /\b(audit|audits|assessment|repair|installation)\b/gi,
   /\b(SEO|search engine optimization|PPC|paid search|content marketing|email marketing|social media marketing|web design|web development|conversion optimization|CRO|link building)\b/gi,
 ];
 
@@ -71,8 +75,14 @@ function countMatches(text: string, patterns: RegExp[]): number {
  * keywords (e.g. "higher education SEO services") is a Service targeting
  * that industry — not an EducationalOccupationalProgram.
  */
-function detectPrimarySchemaType(textParts: TextParts): SchemaType {
-  if (!textParts.htmlContent) return 'WebPage';
+export interface SchemaDetection {
+  type: SchemaType;
+  confidence: number;
+  evidence: string[];
+}
+
+export function detectPrimarySchemaType(textParts: TextParts): SchemaDetection {
+  if (!textParts.htmlContent) return { type: 'WebPage', confidence: 0.4, evidence: ['No HTML supplied'] };
 
   const headingsText = textParts.headings.map((h) => h.text).join(' ');
   const bodySample = textParts.body ? textParts.body.slice(0, 4000) : '';
@@ -91,13 +101,48 @@ function detectPrimarySchemaType(textParts: TextParts): SchemaType {
   const business = countMatches(combined, BUSINESS_PATTERNS);
   const educational = countMatches(combined, EDUCATIONAL_PROGRAM_PATTERNS);
   const article = countMatches(combined, ARTICLE_PATTERNS);
+  const $ = cheerio.load(textParts.htmlContent);
+  const evidence: string[] = [];
+  const hasDate = Boolean(
+    $('time[datetime], meta[property="article:published_time"], [itemprop="datePublished"]').length,
+  );
+  const hasLocalContact = Boolean(
+    $('[itemprop="address"], address').length
+    || combined.match(/\b\d{1,5}\s+[A-Za-z0-9 .'-]+\s(?:street|st|avenue|ave|road|rd|boulevard|blvd|drive|dr|lane|ln)\b/i),
+  ) && Boolean(combined.match(/(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]\d{3}[-.\s]\d{4}/));
+  const hasProgramCredential = /\b(certificate|degree|diploma|credential|bachelor|master|doctorate|associate)\b/i.test(combined);
+  const hasProgramDetails = /\b(curriculum|coursework|credit hours|admissions requirements|tuition|application deadline|prerequisites)\b/i.test(combined);
+  const hasEducationProvider = /\b(university|college|school|institute|academy)\b/i.test(combined);
 
-  // Strong agency signal → Service wins over Educational even if education
-  // keywords are present (they're describing the target audience, not the product)
-  if (service >= 2 && agencyContext >= 1) return 'Service';
+  if ((article >= 1 || $('article').length > 0) && hasDate) {
+    evidence.push('Article or guide language', 'Visible author evidence', 'Published-date evidence');
+    return { type: 'Article', confidence: 0.9, evidence };
+  }
 
-  // Article beats Service if it clearly reads as a post
-  if (article >= 3 && article > service) return 'Article';
+  // Strong agency signal → Service wins over Educational if education terms
+  // describe the audience rather than a real credential-bearing program.
+  const directAgencySignal = /\b(we help|we work with|our clients|our services|agency|consultancy|consulting firm)\b/i.test(combined);
+  const directServiceSignal = /\b(service|services|marketing|consulting|audit|audits|solution|solutions)\b/i.test(combined);
+  const explicitProviderOffer = /\b(we help|we provide|we offer|our (?:service|services))\b/i.test(textParts.body);
+  if ((agencyContext >= 1 || directAgencySignal || explicitProviderOffer) && (service >= 1 || directServiceSignal)) {
+    evidence.push('Named service language', 'Provider or agency context');
+    return { type: 'Service', confidence: Math.min(0.95, 0.72 + service * 0.03), evidence };
+  }
+
+  if (business >= 2 && hasLocalContact) {
+    evidence.push('Local business language', 'Visible address and telephone evidence');
+    return { type: 'LocalBusiness', confidence: 0.88, evidence };
+  }
+
+  if (educational >= 2 && hasProgramCredential && hasProgramDetails && hasEducationProvider) {
+    evidence.push('Named credential', 'Program curriculum or admissions facts', 'Education provider evidence');
+    return { type: 'EducationalOccupationalProgram', confidence: 0.9, evidence };
+  }
+
+  if (service >= 2 && /\b(we|our|provider|provides|offers|company|agency|firm|consulting)\b/i.test(combined)) {
+    evidence.push('Named service language', 'Provider context');
+    return { type: 'Service', confidence: 0.76, evidence };
+  }
 
   const scores: Array<[SchemaType, number]> = [
     ['Service', service],
@@ -108,9 +153,10 @@ function detectPrimarySchemaType(textParts: TextParts): SchemaType {
 
   scores.sort((a, b) => b[1] - a[1]);
   const [topType, topScore] = scores[0];
-
-  // Require at least 2 matches to override WebPage default
-  return topScore >= 2 ? topType : 'WebPage';
+  const fallbackEvidence = topScore > 0
+    ? [`${topType} signals were present but required page facts were missing`]
+    : ['No specialized page-type evidence met the minimum threshold'];
+  return { type: 'WebPage', confidence: topScore > 0 ? 0.65 : 0.8, evidence: fallbackEvidence };
 }
 
 /**
@@ -122,7 +168,7 @@ export function generateJsonLd(
   mainTopic: string,
   url: string,
 ): Record<string, unknown> {
-  const schemaType = detectPrimarySchemaType(textParts);
+  const schemaType = detectPrimarySchemaType(textParts).type;
 
   switch (schemaType) {
     case 'Service':
@@ -136,4 +182,28 @@ export function generateJsonLd(
     default:
       return generateWebPageSchema(entities, textParts, url);
   }
+}
+
+export function generateSchemaArtifact(
+  entities: EnrichedEntity[],
+  textParts: TextParts,
+  mainTopic: string,
+  url: string,
+): SchemaArtifact {
+  const detection = detectPrimarySchemaType(textParts);
+  const raw = (() => {
+    switch (detection.type) {
+      case 'Service':
+        return generateServiceSchema(entities, textParts, url);
+      case 'LocalBusiness':
+        return generateLocalBusinessSchema(entities, textParts, mainTopic, url);
+      case 'EducationalOccupationalProgram':
+        return generateEducationalSchema(entities, textParts, url);
+      case 'Article':
+        return generateArticleSchema(entities, textParts, url);
+      default:
+        return generateWebPageSchema(entities, textParts, url);
+    }
+  })();
+  return buildSchemaArtifact(raw, detection, textParts, url);
 }

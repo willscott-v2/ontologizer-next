@@ -5,6 +5,9 @@ let mockSb: MockSupabase;
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => mockSb.client,
 }));
+vi.mock('node:dns/promises', () => ({
+  lookup: vi.fn(async () => [{ address: '93.184.216.34', family: 4 }]),
+}));
 
 function mockFetchOnce(html: string, status = 200, contentType = 'text/html') {
   const fetchMock = vi.fn(async () => ({
@@ -12,8 +15,10 @@ function mockFetchOnce(html: string, status = 200, contentType = 'text/html') {
     status,
     statusText: status === 200 ? 'OK' : 'ERR',
     headers: {
-      get: (k: string) =>
-        k.toLowerCase() === 'content-type' ? contentType : null,
+      get: (k: string) => {
+        if (k.toLowerCase() === 'content-type') return contentType;
+        return null;
+      },
     },
     text: async () => html,
   }));
@@ -157,6 +162,70 @@ describe('fetcher + url_cache', () => {
 
     await expect(fetchWebpage('https://example.com')).rejects.toThrow(
       /HTTP 404/,
+    );
+  });
+
+  it('rejects private and local network targets before cache access', async () => {
+    const { fetchWebpage } = await import('../../pipeline/fetcher');
+    const fetchMock = mockFetchOnce('<html>private</html>');
+
+    await expect(fetchWebpage('http://127.0.0.1/admin')).rejects.toThrow(
+      /Private or reserved/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockSb.queries).toHaveLength(0);
+  });
+
+  it.each([
+    'http://localhost/admin',
+    'http://169.254.169.254/latest/meta-data',
+    'http://10.0.0.1',
+    'http://172.16.0.1',
+    'http://192.168.1.1',
+    'http://[::1]/',
+    'http://[fd00::1]/',
+  ])('rejects private target %s', async (target) => {
+    const { validatePublicUrl } = await import('../../pipeline/fetcher');
+    await expect(validatePublicUrl(target)).rejects.toThrow(/Private|local/);
+  });
+
+  it.each([
+    'ftp://example.com/file',
+    'file:///etc/passwd',
+    'https://user:password@example.com',
+    'not a url',
+  ])('rejects unsupported or malformed target %s', async (target) => {
+    const { validatePublicUrl } = await import('../../pipeline/fetcher');
+    await expect(validatePublicUrl(target)).rejects.toThrow();
+  });
+
+  it('revalidates redirect targets before following them', async () => {
+    const { fetchWebpage } = await import('../../pipeline/fetcher');
+    mockSb.queueResponse({ data: null, error: null });
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 302,
+      statusText: 'Found',
+      headers: {
+        get: (key: string) => key.toLowerCase() === 'location'
+          ? 'http://169.254.169.254/latest/meta-data'
+          : null,
+      },
+    }));
+    // @ts-expect-error test response stub
+    globalThis.fetch = fetchMock;
+
+    await expect(fetchWebpage('https://example.com')).rejects.toThrow(/Private/);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects non-HTML responses', async () => {
+    const { fetchWebpage } = await import('../../pipeline/fetcher');
+    mockFetchOnce('{"secret":true}', 200, 'application/json');
+    mockSb.queueResponse({ data: null, error: null });
+
+    await expect(fetchWebpage('https://example.com/data')).rejects.toThrow(
+      /Unsupported content type/,
     );
   });
 });

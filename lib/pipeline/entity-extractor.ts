@@ -1,5 +1,5 @@
 /**
- * Entity extraction via OpenAI (primary) with regex fallback.
+ * Entity extraction via OpenAI.
  * Ported from PHP extract_entities_openai() (lines 469-585) and extract_entities_basic() (lines 587-623).
  */
 
@@ -202,20 +202,8 @@ export async function extractEntities(
   text: string,
   openaiApiKey?: string,
 ): Promise<ExtractionResult> {
-  // Try OpenAI first if a key is available
-  if (openaiApiKey) {
-    try {
-      return await extractEntitiesOpenAI(text, openaiApiKey);
-    } catch {
-      // Fall through to basic extraction
-    }
+  if (!openaiApiKey) {
+    throw new Error('OpenAI API key is not configured for entity extraction.');
   }
-
-  // Fallback to regex-based extraction
-  const entities = extractEntitiesBasic(text);
-  return {
-    mainTopic: '',
-    mainTopicConfidence: 0,
-    entities,
-  };
+  return extractEntitiesOpenAI(text, openaiApiKey);
 }

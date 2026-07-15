@@ -8,8 +8,58 @@
  */
 
 import * as cheerio from 'cheerio';
-import type { SemanticChunk, FanoutResult, AiUsage } from '../types/analysis';
+import { z } from 'zod';
+import type { SemanticChunk, FanoutResult, AiUsage, QueryCoverageAnalysis } from '../types/analysis';
 import { computeCost } from '../pricing';
+import { QUERY_COVERAGE_VERSION } from '@/lib/analysis/version';
+
+const questionSchema = z.object({
+  question: z.string().min(8).max(180),
+  intent: z.enum(['definition', 'comparison', 'procedure', 'evaluation', 'audience', 'trust', 'local']),
+  coverage: z.enum(['covered', 'partial', 'missing']),
+  evidenceChunkIds: z.array(z.string().min(1).max(40)).max(4),
+  checkedScope: z.string().min(10).max(240),
+  gapAction: z.string().min(10).max(240).optional(),
+}).superRefine((question, context) => {
+  if (question.coverage !== 'missing' && question.evidenceChunkIds.length === 0) {
+    context.addIssue({ code: 'custom', message: 'Covered and partial questions require evidence chunk IDs.' });
+  }
+  if (question.coverage !== 'covered' && !question.gapAction) {
+    context.addIssue({ code: 'custom', message: 'Partial and missing questions require a gap action.' });
+  }
+});
+
+export const queryCoverageResponseSchema = z.object({
+  primaryEntity: z.string().min(2).max(120),
+  questions: z.array(questionSchema).min(5).max(8),
+}).strict();
+
+export function validateQueryCoverageResponse(
+  value: unknown,
+  chunks: SemanticChunk[],
+): QueryCoverageAnalysis | null {
+  const validated = queryCoverageResponseSchema.safeParse(value);
+  if (!validated.success) return null;
+  const validChunkIds = new Set(chunks.map((chunk) => chunk.id));
+  if (validated.data.questions.some((question) =>
+    question.evidenceChunkIds.some((id) => !validChunkIds.has(id)))) {
+    return null;
+  }
+  const normalizedQuestions = new Set(
+    validated.data.questions.map((question) => question.question.toLowerCase().replace(/[^a-z0-9]/g, '')),
+  );
+  if (normalizedQuestions.size !== validated.data.questions.length) return null;
+  const summary = validated.data.questions.reduce(
+    (counts, question) => ({ ...counts, [question.coverage]: counts[question.coverage] + 1 }),
+    { covered: 0, partial: 0, missing: 0 },
+  );
+  return {
+    ...validated.data,
+    summary,
+    promptVersion: QUERY_COVERAGE_VERSION,
+    disclosure: 'Modeled questions based on this page, not observed Google searches.',
+  };
+}
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
@@ -32,10 +82,10 @@ export async function analyzeFanout(
   }
 
   const chunks = extractSemanticChunks(htmlContent);
-  const prompt = buildFanoutPrompt(chunks, url);
+  const prompt = buildQueryCoveragePrompt(chunks, url);
 
   try {
-    const analysis = await callGeminiApi(prompt, geminiKey);
+    const analysis = await callGeminiApi(prompt, geminiKey, chunks);
 
     if ('error' in analysis) {
       return {
@@ -47,7 +97,7 @@ export async function analyzeFanout(
     }
 
     return {
-      analysis: analysis.text,
+      analysis: analysis.analysis,
       chunksExtracted: chunks.length,
       chunks,
       usage: analysis.usage,
@@ -69,9 +119,9 @@ export async function analyzeFanout(
  * Produces a compact representation of the page's key content blocks.
  */
 export function extractSemanticChunks(htmlContent: string): SemanticChunk[] {
-  const chunks: SemanticChunk[] = [];
+  const chunks: Array<Omit<SemanticChunk, 'id'>> = [];
 
-  if (!htmlContent) return chunks;
+  if (!htmlContent) return [];
 
   const $ = cheerio.load(htmlContent);
 
@@ -224,58 +274,29 @@ export function extractSemanticChunks(htmlContent: string): SemanticChunk[] {
     }
   }
 
-  return chunks;
+  return chunks.map((chunk, index) => ({ ...chunk, id: `chunk-${index + 1}` }));
 }
 
 // ─── Prompt construction ────────────────────────────────────────────────────
 
-function buildFanoutPrompt(chunks: SemanticChunk[], url?: string): string {
+export function buildQueryCoveragePrompt(chunks: SemanticChunk[], url?: string): string {
   const urlText = url ? `URL: ${url}\n\n` : '';
 
-  return `You are analyzing a webpage for Google's AI Mode query fan-out potential. Google's AI Mode decomposes user queries into multiple sub-queries to synthesize comprehensive answers across sources.
+  return `Model adjacent questions a person may ask about this page and judge whether the supplied page chunks can answer them. These are modeled questions, not observed Google searches or Search Console data.
 
 ${urlText}SEMANTIC CHUNKS FROM PAGE:
 ${JSON.stringify(chunks, null, 2)}
 
-Based on this content, perform the following analysis:
+Return 5-8 distinct questions across these intent labels only: definition, comparison, procedure, evaluation, audience, trust, local.
 
-1. IDENTIFY PRIMARY ENTITY: What is the main ontological entity or topic of this page?
+For each question:
+- covered: cite one or more supplied chunk IDs that directly answer it.
+- partial: cite supplied chunk IDs and provide one concise gapAction.
+- missing: use an empty evidenceChunkIds array, explain which supplied chunks were checked in checkedScope, and provide one concise gapAction.
+- Never cite a chunk ID that was not supplied.
 
-2. PREDICT FAN-OUT QUERIES: Generate 12-15 distinct sub-queries that Google's AI Mode is likely to decompose a user's question about this topic into. Cover multiple intent types:
-   - Definitional / explanatory ("what is X", "what does X mean")
-   - Related / adjacent topics (broader or neighbouring concepts)
-   - Implicit needs (unstated problems this page solves)
-   - Comparative (X vs Y, alternatives, "is X better than Y")
-   - Procedural / how-to (steps, processes)
-   - Evaluative (cost, quality, reviews, pros/cons, ROI)
-   - Contextual / audience-specific (for-whom, when, where, budget)
-   - Trust / credibility (credentials, experience, case studies)
-
-3. SEMANTIC COVERAGE SCORE: For each predicted query, assess if the page provides the information needed to answer it:
-   - Yes = the page directly and meaningfully answers the query
-   - Partial = the page touches the topic but lacks depth, specifics, or examples
-   - No = the page does not address this query
-
-4. RATIONALE: For each query, add a one-sentence "Why:" note explaining (a) why a user would implicitly ask this sub-query, and (b) what specifically on the page covers (or fails to cover) it.
-
-5. FOLLOW-UP QUESTION POTENTIAL: List 5-8 questions users would likely ask AFTER reading this content — next-step intents, not re-phrasings.
-
-STRICT OUTPUT FORMAT (do not deviate; use plain text, one item per line, no markdown bold):
-
-PRIMARY ENTITY: [entity name]
-
-FAN-OUT QUERIES:
-• [Query 1] - Coverage: [Yes/Partial/No] - Why: [one-sentence rationale]
-• [Query 2] - Coverage: [Yes/Partial/No] - Why: [one-sentence rationale]
-... (12-15 queries total)
-
-FOLLOW-UP POTENTIAL:
-• [Follow-up question 1]
-• [Follow-up question 2]
-... (5-8 total)
-
-COVERAGE SCORE: [X/Y queries fully covered]
-RECOMMENDATIONS: [2-4 sentences listing the highest-leverage content gaps to fill, grouped by theme]`;
+Return only JSON using this contract:
+{"primaryEntity":"...","questions":[{"question":"...","intent":"definition","coverage":"covered","evidenceChunkIds":["chunk-1"],"checkedScope":"What was checked and why the judgment follows.","gapAction":"Required only for partial or missing."}]}`;
 }
 
 // ─── Gemini API call ────────────────────────────────────────────────────────
@@ -283,14 +304,16 @@ RECOMMENDATIONS: [2-4 sentences listing the highest-leverage content gaps to fil
 async function callGeminiApi(
   prompt: string,
   apiKey: string,
-): Promise<{ text: string; usage?: AiUsage } | { error: string }> {
+  chunks: SemanticChunk[],
+): Promise<{ analysis: QueryCoverageAnalysis; usage?: AiUsage } | { error: string }> {
   // Gemini 3.x guidance: don't pin a low temperature (looping risk) and
   // prefer default thinking behavior — thinking tokens bill as output and
   // 12288 leaves room for thinking plus a full 12-15 query response.
   const requestData = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: {
-      maxOutputTokens: 12288,
+      maxOutputTokens: 4096,
+      responseMimeType: 'application/json',
     },
   };
 
@@ -386,7 +409,20 @@ async function callGeminiApi(
         };
       }
 
-      return { text, usage };
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text.replace(/^```json\s*|\s*```$/g, ''));
+      } catch {
+        return { error: 'Gemini returned invalid JSON for AI Query Coverage.' };
+      }
+      const validated = validateQueryCoverageResponse(parsed, chunks);
+      if (!validated) {
+        return { error: 'Gemini returned an invalid AI Query Coverage response.' };
+      }
+      return {
+        analysis: validated,
+        usage,
+      };
     } catch (err) {
       clearTimeout(timeout);
 

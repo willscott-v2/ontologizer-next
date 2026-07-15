@@ -8,7 +8,6 @@
 import * as cheerio from 'cheerio';
 import type { AnyNode } from 'domhandler';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CheerioEl = cheerio.Cheerio<AnyNode>;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -253,10 +252,6 @@ function extractFaq(
     });
   }
 
-  // Strategy 2: Extract FAQ patterns from headings across the page
-  const headingFaqs = extractFaqFromHeadings($);
-  faqItems.push(...headingFaqs);
-
   // Deduplicate and validate
   const unique = deduplicateFaqs(faqItems);
 
@@ -301,7 +296,7 @@ function extractFaqItemsFromContainer(
 
   for (const { el, text } of questions) {
     const answer = findFaqAnswer($, el);
-    if (answer && answer.length > 20) {
+    if (answer && answer.length >= 40) {
       items.push({
         '@type': 'Question',
         name: cleanFaqQuestion(text),
@@ -316,42 +311,9 @@ function extractFaqItemsFromContainer(
   return items;
 }
 
-function extractFaqFromHeadings(
-  $: cheerio.CheerioAPI,
-): Record<string, unknown>[] {
-  const items: Record<string, unknown>[] = [];
-
-  $('h1, h2, h3, h4, h5, h6').each((_i, el) => {
-    const text = $(el).text().trim();
-    if (isValidFaqQuestion(text)) {
-      const answer = findFaqAnswer($, $(el));
-      if (answer && answer.length > 50) {
-        items.push({
-          '@type': 'Question',
-          name: cleanFaqQuestion(text),
-          acceptedAnswer: {
-            '@type': 'Answer',
-            text: cleanFaqAnswer(answer),
-          },
-        });
-      }
-    }
-  });
-
-  return items;
-}
-
 function isValidFaqQuestion(text: string): boolean {
   if (!text || text.length < 10 || text.length > 300) return false;
-
-  const questionPatterns = [
-    /\b(what|how|why|when|where|who|which|can|could|should|would|will|is|are|do|does|did)\b/i,
-    /\?$/,
-    /^Q:/i,
-    /^Question:/i,
-  ];
-
-  return questionPatterns.some((p) => p.test(text));
+  return /\?$/.test(text) || /^(Q:|Question:)/i.test(text);
 }
 
 function cleanFaqQuestion(text: string): string {
@@ -401,9 +363,9 @@ function findFaqAnswer(
   ];
 
   for (const sel of accordionSelectors) {
-    const answer = questionEl.find(sel).first();
+    const answer = questionEl.siblings(sel.replace(/^~\s*/, '')).first();
     if (answer.length) {
-      const text = answer.text().trim();
+      const text = visibleAnswerText($, answer);
       if (text.length > 20) return text;
     }
   }
@@ -415,7 +377,7 @@ function findFaqAnswer(
     // Stop at next heading
     if (/^h[1-6]$/.test(tagName)) break;
 
-    const text = next.text().trim();
+    const text = visibleAnswerText($, next);
     if (text.length > 20) return text;
     next = next.next();
   }
@@ -431,13 +393,22 @@ function findFaqAnswer(
         continue;
       }
       if (foundQuestion) {
-        const text = $(child).text().trim();
+        const text = visibleAnswerText($, $(child));
         if (text.length > 20) return text;
       }
     }
   }
 
   return null;
+}
+
+function visibleAnswerText($: cheerio.CheerioAPI, element: CheerioEl): string {
+  const clone = element.clone();
+  clone.find(
+    'script, style, noscript, nav, form, button, input, select, textarea, img, svg, ' +
+    '[hidden], [aria-hidden="true"], [class*="accordion-label"], [class*="social"], [class*="cta"]',
+  ).remove();
+  return clone.text().replace(/\s+/g, ' ').trim();
 }
 
 function deduplicateFaqs(
@@ -495,8 +466,7 @@ function extractHowTo(
     }
   }
 
-  // Strategy 2: Detect from page structure
-  return extractHowToFromPageStructure($);
+  return null;
 }
 
 function extractHowToFromContainer(
@@ -648,64 +618,6 @@ function extractSteps(
   return steps.slice(0, 25);
 }
 
-function extractHowToFromPageStructure(
-  $: cheerio.CheerioAPI,
-): Record<string, unknown> | null {
-  const h1 = $('h1').first();
-  if (!h1.length) return null;
-
-  const title = h1.text().trim();
-  if (!/\b(how\s+to|guide|tutorial|instructions|steps)\b/i.test(title)) {
-    return null;
-  }
-
-  // Look for step-like headings
-  const stepHeadings: CheerioEl[] = [];
-  $('h2, h3').each((_i, el) => {
-    const text = $(el).text().trim();
-    if (/^(Step\s+\d+|[123456789]\d*\.)/.test(text)) {
-      stepHeadings.push($(el));
-    }
-  });
-
-  if (stepHeadings.length < 2) return null;
-
-  const steps: Record<string, unknown>[] = [];
-  for (let i = 0; i < stepHeadings.length; i++) {
-    const heading = stepHeadings[i];
-    const stepTitle = heading.text().trim();
-
-    // Collect content until next heading
-    let content = '';
-    let next = heading.next();
-    while (next.length) {
-      const tagName = (next.prop('tagName') || '').toLowerCase();
-      if (/^h[1-6]$/.test(tagName)) break;
-      content += ' ' + next.text().trim();
-      next = next.next();
-    }
-
-    if (content.trim()) {
-      steps.push({
-        '@type': 'HowToStep',
-        position: i + 1,
-        name: cleanStepName(stepTitle),
-        text: cleanStepText(content.trim()),
-      });
-    }
-  }
-
-  if (steps.length >= 2) {
-    return {
-      '@type': 'HowTo',
-      name: title,
-      step: steps.slice(0, 20),
-    };
-  }
-
-  return null;
-}
-
 function extractTimeInfo(text: string): string | null {
   const patterns = [
     /(\d+)\s*(minutes?|mins?)/i,
@@ -796,7 +708,7 @@ function parseAddress(text: string): Record<string, unknown> {
   }
 
   // Street address
-  let cleanAddress = text
+  const cleanAddress = text
     .replace(/\b\d{5}(-\d{4})?\b.*$/, '')
     .replace(/\b[A-Z]{2}\b.*$/, '')
     .trim();
