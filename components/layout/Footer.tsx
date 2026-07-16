@@ -15,6 +15,17 @@ export function Footer() {
           </a>
           .
         </p>
+        <p className="mt-3">
+          Need a broader technical and on-page audit?{' '}
+          <a
+            href="https://ai-grader.searchinfluence.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Try the AI Website Grader
+          </a>
+          .
+        </p>
         <p className="mt-4">
           <a
             href="https://github.com/willscott-v2/ontologizer"

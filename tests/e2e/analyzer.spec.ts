@@ -101,6 +101,10 @@ test('landing form is focused, responsive, and accessible', async ({ page }, tes
   await page.goto('/')
   await expect(page.getByRole('heading', { level: 1 })).toContainText('See what your page tells search and AI systems')
   await expect(page.getByRole('button', { name: 'Analyze page', exact: true })).toBeDisabled()
+  await expect(page.getByRole('link', { name: 'Try the AI Website Grader' })).toHaveAttribute(
+    'href',
+    'https://ai-grader.searchinfluence.com/'
+  )
   if (testInfo.project.name === 'desktop') {
     const analyzeButton = page.getByRole('button', { name: 'Analyze page', exact: true })
     const analyzeBox = await analyzeButton.boundingBox()
