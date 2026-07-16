@@ -73,7 +73,6 @@ export default function Home() {
           <section className="home-hero" aria-labelledby="home-title">
             <div className="si-container hero-grid">
               <div className="hero-copy">
-                <p className="hero-eyebrow">Free AI content clarity + schema analyzer</p>
                 <h1 id="home-title">See what your page tells search and AI systems.</h1>
                 <p className="hero-lede">
                   Review topic focus, entity clarity, semantic coherence, answer structure, and connected JSON-LD in one evidence-backed report.
