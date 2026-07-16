@@ -1,6 +1,7 @@
 'use client'
 
-import type { AnalysisResult } from '@/lib/types/analysis'
+import { AlertTriangle, CheckCircle2, CircleHelp, XCircle } from 'lucide-react'
+import type { AnalysisResult, ClarityStatus } from '@/lib/types/analysis'
 
 const dimensionLabels = {
   topicFocus: 'Topic Focus',
@@ -8,6 +9,13 @@ const dimensionLabels = {
   semanticCoherence: 'Semantic Coherence',
   answerStructure: 'Answer Structure',
 } as const
+
+function StatusIcon({ status }: { status: ClarityStatus }) {
+  if (status === 'strong') return <CheckCircle2 className="size-5" aria-hidden="true" />
+  if (status === 'mixed') return <AlertTriangle className="size-5" aria-hidden="true" />
+  if (status === 'weak') return <XCircle className="size-5" aria-hidden="true" />
+  return <CircleHelp className="size-5" aria-hidden="true" />
+}
 
 export function OverviewTab({ result }: { result: AnalysisResult }) {
   const query = result.fanoutAnalysis?.analysis
@@ -61,6 +69,7 @@ export function OverviewTab({ result }: { result: AnalysisResult }) {
           {Object.entries(result.clarity.dimensions).map(([key, dimension]) => (
             <article key={key} className={`dimension-card status-${dimension.status}`}>
               <div className="dimension-card-heading">
+                <StatusIcon status={dimension.status} />
                 <h3>{dimensionLabels[key as keyof typeof dimensionLabels]}</h3>
                 <span>{dimension.status}</span>
               </div>

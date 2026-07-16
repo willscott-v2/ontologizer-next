@@ -87,7 +87,7 @@
   --chart-3: var(--si-medium-blue);
   --chart-4: var(--orange-dark);
   --chart-5: var(--si-light-orange);
-  --radius: 0.25rem;
+  --radius: 0.625rem;
   --sidebar: var(--si-slate);
   --sidebar-foreground: var(--white);
   --sidebar-primary: var(--si-orange);

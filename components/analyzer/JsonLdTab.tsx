@@ -56,7 +56,7 @@ export function JsonLdTab({ jsonLd, schemaStatus }: JsonLdTabProps) {
         <pre
           aria-label="Generated JSON-LD"
           tabIndex={0}
-          className="overflow-auto bg-muted p-4 text-xs leading-relaxed font-mono"
+          className="overflow-auto rounded-lg bg-muted p-4 text-xs leading-relaxed font-mono"
         >
           {formatted}
         </pre>

@@ -1,5 +1,6 @@
 'use client'
 
+import { Badge } from '@/components/ui/badge'
 import type { ClarityAssessment, ClarityStatus } from '@/lib/types/analysis'
 
 const labels = {
@@ -10,47 +11,47 @@ const labels = {
 } as const
 
 function statusClass(status: ClarityStatus): string {
-  if (status === 'strong') return 'status-strong'
-  if (status === 'mixed') return 'status-mixed'
-  if (status === 'weak') return 'status-weak'
-  return 'status-unavailable'
+  if (status === 'strong') return 'bg-green-100 text-green-800'
+  if (status === 'mixed') return 'bg-amber-100 text-amber-800'
+  if (status === 'weak') return 'bg-red-100 text-red-800'
+  return 'bg-slate-100 text-slate-700'
 }
 
 export function ClaritySummary({ clarity }: { clarity: ClarityAssessment }) {
   return (
-    <div className="clarity-detail">
-      <div className="clarity-detail-grid">
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-2">
         {Object.entries(clarity.dimensions).map(([key, dimension]) => (
-          <section key={key} className="clarity-detail-section">
-            <div className="clarity-detail-heading">
-              <h3>
+          <div key={key} className="rounded-lg border border-[var(--border-gray)] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-semibold text-[var(--content-text)]">
                 {labels[key as keyof typeof labels]}
               </h3>
-              <span className={statusClass(dimension.status)}>{dimension.status}</span>
+              <Badge className={statusClass(dimension.status)}>{dimension.status}</Badge>
             </div>
-            <p>{dimension.summary}</p>
-            <details className="clarity-checks">
-              <summary>Why this status</summary>
-              <ul>
+            <p className="mt-2 text-sm text-[var(--muted-text)]">{dimension.summary}</p>
+            <details className="mt-3 text-sm">
+              <summary className="cursor-pointer font-medium">Why this status</summary>
+              <ul className="mt-2 space-y-2">
                 {dimension.checks.map((check) => (
-                  <li key={check.id}>
-                    <div>
-                      <strong>{check.label}</strong>
-                      <span>{check.status}</span>
+                  <li key={check.id} className="rounded-md bg-[var(--background-gray)] p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">{check.label}</span>
+                      <span className="text-xs uppercase text-[var(--muted-text)]">{check.status}</span>
                     </div>
-                    <p>{check.detail}</p>
+                    <p className="mt-1 text-[var(--muted-text)]">{check.detail}</p>
                   </li>
                 ))}
               </ul>
             </details>
-          </section>
+          </div>
         ))}
       </div>
 
       {clarity.degradedSteps.length > 0 && (
-        <div className="clarity-notes">
-          <p>Analysis notes</p>
-          <ul>
+        <div className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-semibold">Analysis notes</p>
+          <ul className="mt-1 list-disc pl-5">
             {clarity.degradedSteps.map((step) => <li key={step}>{step}</li>)}
           </ul>
         </div>

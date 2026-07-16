@@ -1,6 +1,7 @@
 'use client'
 
 import { Clock, Database, ExternalLink } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { ClaritySummary } from './ClaritySummary'
 import { EntitiesTab } from './EntitiesTab'
 import { JsonLdTab } from './JsonLdTab'
@@ -69,9 +70,9 @@ export function ResultsTabs({ result }: ResultsTabsProps) {
               {result.schemaArtifact.pageType.type} with {Math.round(result.schemaArtifact.pageType.confidence * 100)}% page-type confidence.
             </p>
           </div>
-          <span className={`schema-status schema-status-${result.schemaArtifact.status}`}>
+          <Badge className={`schema-status schema-status-${result.schemaArtifact.status}`}>
             {result.schemaArtifact.status === 'ready' ? 'Ready to review' : result.schemaArtifact.status}
-          </span>
+          </Badge>
         </div>
 
         {issues.length > 0 && (

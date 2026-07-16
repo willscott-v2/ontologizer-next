@@ -1,11 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import {
   CheckCircle2,
+  ClipboardPaste,
   KeyRound,
   Loader2,
   LogIn,
+  Search,
 } from 'lucide-react';
 import type { AnalyzeParams } from '@/lib/types/analysis';
 
@@ -59,6 +62,7 @@ export function AnalyzerForm({
           disabled={isAnalyzing}
           aria-pressed={mode === 'url'}
         >
+          <Search className="h-4 w-4" />
           Analyze URL
         </button>
         <button
@@ -68,6 +72,7 @@ export function AnalyzerForm({
           disabled={isAnalyzing}
           aria-pressed={mode === 'paste'}
         >
+          <ClipboardPaste className="h-4 w-4" />
           Paste content
         </button>
       </div>
@@ -97,7 +102,10 @@ export function AnalyzerForm({
                   Analyzing…
                 </>
               ) : (
-                'Analyze page'
+                <>
+                  <Search className="h-4 w-4" />
+                  Analyze page
+                </>
               )}
             </button>
           </div>
@@ -140,7 +148,10 @@ export function AnalyzerForm({
                 Analyzing…
               </>
             ) : (
-              'Analyze content'
+              <>
+                <ClipboardPaste className="h-4 w-4" />
+                Analyze content
+              </>
             )}
           </button>
         </div>
@@ -190,7 +201,7 @@ export function AnalyzerForm({
             <span className="option-help" aria-hidden="true">ⓘ</span>
           </label>
 
-          {hasApiKeys && <span className="api-key-note">Using your API keys</span>}
+          {hasApiKeys && <Badge variant="secondary">Using your API keys</Badge>}
         </div>
       </details>
 
