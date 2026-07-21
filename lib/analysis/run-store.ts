@@ -117,6 +117,8 @@ export async function completeAnalysisStep(params: {
   geminiInputTokens?: number;
   geminiOutputTokens?: number;
   geminiCostUsd?: number;
+  /** Four clarity dimension statuses, persisted for the admin run log. */
+  clarityStatus?: Record<string, string>;
 }): Promise<void> {
   const supabase = getServiceClient();
   if (!supabase) return;
@@ -144,6 +146,7 @@ export async function completeAnalysisStep(params: {
       gemini_output_tokens: Number(data.gemini_output_tokens ?? 0) + (params.geminiOutputTokens ?? 0),
       gemini_cost_usd: geminiCost,
       total_cost_usd: openaiCost + geminiCost,
+      ...(params.clarityStatus ? { clarity_status: params.clarityStatus } : {}),
     })
     .eq('id', params.analysisRunId);
 }

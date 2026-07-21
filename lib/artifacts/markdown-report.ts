@@ -20,6 +20,7 @@ export function generateMarkdownReport(result: AnalysisResult): string {
     `**Analyzed:** ${result.analyzedAt}`,
     `**Source:** ${result.source.url ?? 'Pasted content'}`,
     `**Analysis version:** ${result.clarity.analysisVersion}`,
+    ...(typeof result.apiCostUsd === 'number' ? [`**API cost:** $${result.apiCostUsd.toFixed(4)}`] : []),
     '',
     '## Priority actions',
     '',

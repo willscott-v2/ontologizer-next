@@ -122,6 +122,8 @@ export interface SchemaArtifactIssue {
 
 export interface SchemaArtifact {
   jsonLd: Record<string, unknown>;
+  /** JSON-LD already published on the analyzed page, when detected. */
+  existingSchema?: { found: boolean; types: string[] };
   pageType: {
     type: 'Service' | 'LocalBusiness' | 'EducationalOccupationalProgram' | 'Article' | 'WebPage';
     confidence: number;
@@ -201,6 +203,8 @@ export interface AnalysisResult {
   clarity: ClarityAssessment;
   fanoutAnalysis?: FanoutResult;
   processingTimeMs: number;
+  /** USD across extract + generate + fanout AI calls; 0 for fully cached runs. */
+  apiCostUsd?: number;
   source: { mode: 'url' | 'paste'; url?: string };
   analyzedAt: string;
   provenance: {

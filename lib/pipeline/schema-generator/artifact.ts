@@ -178,6 +178,35 @@ function validateArtifact(
   return { errors, warnings };
 }
 
+function collectJsonLdTypes(node: unknown, out: Set<string>): void {
+  if (Array.isArray(node)) {
+    node.forEach((item) => collectJsonLdTypes(item, out));
+    return;
+  }
+  if (!node || typeof node !== 'object') return;
+  const record = node as Record<string, unknown>;
+  const type = record['@type'];
+  if (typeof type === 'string') out.add(type);
+  else if (Array.isArray(type)) type.forEach((value) => typeof value === 'string' && out.add(value));
+  if (record['@graph']) collectJsonLdTypes(record['@graph'], out);
+}
+
+export function detectExistingJsonLd(html: string): { found: boolean; types: string[] } {
+  const types = new Set<string>();
+  let found = false;
+  const scriptRe = /<script[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = scriptRe.exec(html))) {
+    found = true;
+    try {
+      collectJsonLdTypes(JSON.parse(match[1].trim()), types);
+    } catch {
+      // An unparseable block still counts as existing schema.
+    }
+  }
+  return { found, types: [...types].slice(0, 12) };
+}
+
 export function buildSchemaArtifact(
   raw: Record<string, unknown>,
   detection: SchemaDetection,
@@ -186,6 +215,14 @@ export function buildSchemaArtifact(
 ): SchemaArtifact {
   const jsonLd = connectGraph(raw, detection.type, url);
   const { errors, warnings } = validateArtifact(jsonLd, detection, url);
+  const existingSchema = detectExistingJsonLd(textParts.htmlContent ?? '');
+  if (existingSchema.found) {
+    warnings.push({
+      code: 'existing-schema',
+      message: `This page already publishes JSON-LD${existingSchema.types.length ? ` (${existingSchema.types.join(', ')})` : ''}.`,
+      action: 'Merge the generated graph into the existing markup — update matching nodes instead of adding a second schema block.',
+    });
+  }
   const factsUsed = [
     textParts.title ? 'Page title' : null,
     textParts.description ? 'Meta description' : null,
@@ -204,6 +241,7 @@ export function buildSchemaArtifact(
       : 'ready';
   return {
     jsonLd,
+    existingSchema,
     pageType: detection,
     status,
     errors,

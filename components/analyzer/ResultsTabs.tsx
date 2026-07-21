@@ -33,6 +33,9 @@ export function ResultsTabs({ result }: ResultsTabsProps) {
         <div className="report-meta-items">
           <span><Clock className="size-4" /> {formatMs(result.processingTimeMs)}</span>
           <span>{result.entities.length} {result.entities.length === 1 ? 'entity' : 'entities'}</span>
+          {typeof result.apiCostUsd === 'number' && (
+            <span>${result.apiCostUsd.toFixed(4)} API cost</span>
+          )}
           {(result.provenance.fetch === 'cached' || result.provenance.extraction === 'cached') && (
             <span><Database className="size-4" /> Cached source data</span>
           )}
@@ -64,14 +67,30 @@ export function ResultsTabs({ result }: ResultsTabsProps) {
       <section className="report-section-card schema-review" aria-labelledby="schema-review-title">
         <div className="schema-review-heading">
           <div>
-            <p className="report-eyebrow">Implementation artifact</p>
+            <p className="report-eyebrow">
+              {result.schemaArtifact.existingSchema?.found
+                ? 'Recommended update to existing schema'
+                : 'Implementation artifact'}
+            </p>
             <h2 id="schema-review-title">Connected JSON-LD</h2>
             <p>
               {result.schemaArtifact.pageType.type} with {Math.round(result.schemaArtifact.pageType.confidence * 100)}% page-type confidence.
+              {result.schemaArtifact.existingSchema?.found && (
+                <>
+                  {' '}This page already publishes JSON-LD
+                  {result.schemaArtifact.existingSchema.types.length > 0 &&
+                    ` (${result.schemaArtifact.existingSchema.types.join(', ')})`}
+                  , so treat the artifact below as an update to that markup, not a second schema block.
+                </>
+              )}
             </p>
           </div>
           <Badge className={`schema-status schema-status-${result.schemaArtifact.status}`}>
-            {result.schemaArtifact.status === 'ready' ? 'Ready to review' : result.schemaArtifact.status}
+            {result.schemaArtifact.existingSchema?.found
+              ? 'Recommended update'
+              : result.schemaArtifact.status === 'ready'
+                ? 'Ready to review'
+                : result.schemaArtifact.status}
           </Badge>
         </div>
 

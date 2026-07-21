@@ -48,7 +48,7 @@ export async function checkFreeUsage(userId: string): Promise<UsageCheck> {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('email, free_analyses_used, free_analyses_reset_at')
+    .select('email, free_analyses_used, free_analyses_reset_at, bonus_analyses')
     .eq('id', userId)
     .single();
 
@@ -60,6 +60,9 @@ export async function checkFreeUsage(userId: string): Promise<UsageCheck> {
   if (isUnlimitedEmail(profile.email)) {
     return { allowed: true, remaining: Number.POSITIVE_INFINITY, unlimited: true };
   }
+
+  // One-time promotional credits, consumed only after the monthly allowance.
+  const bonus = profile.bonus_analyses ?? 0;
 
   // Check if the monthly counter needs resetting
   const resetAt = new Date(profile.free_analyses_reset_at);
@@ -73,11 +76,11 @@ export async function checkFreeUsage(userId: string): Promise<UsageCheck> {
       .update({ free_analyses_used: 0, free_analyses_reset_at: nextReset.toISOString() })
       .eq('id', userId);
 
-    return { allowed: true, remaining: FREE_ANALYSES_PER_MONTH };
+    return { allowed: true, remaining: FREE_ANALYSES_PER_MONTH + bonus };
   }
 
   const used = profile.free_analyses_used ?? 0;
-  const remaining = Math.max(0, FREE_ANALYSES_PER_MONTH - used);
+  const remaining = Math.max(0, FREE_ANALYSES_PER_MONTH - used) + bonus;
 
   if (remaining <= 0) {
     return {
@@ -100,11 +103,20 @@ export async function incrementFreeUsage(userId: string): Promise<void> {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('email, free_analyses_used')
+    .select('email, free_analyses_used, bonus_analyses')
     .eq('id', userId)
     .single();
 
   if (!profile || isUnlimitedEmail(profile.email)) return;
+
+  // Monthly allowance first; promotional bonus credits only once it's spent.
+  if ((profile.free_analyses_used ?? 0) >= FREE_ANALYSES_PER_MONTH && (profile.bonus_analyses ?? 0) > 0) {
+    await supabase
+      .from('profiles')
+      .update({ bonus_analyses: (profile.bonus_analyses ?? 0) - 1 })
+      .eq('id', userId);
+    return;
+  }
 
   // Try atomic increment via RPC, fall back to direct update
   const { error } = await supabase.rpc('increment_free_analyses', { user_id: userId });

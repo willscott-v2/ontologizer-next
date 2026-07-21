@@ -61,6 +61,12 @@ export async function POST(request: NextRequest) {
       openaiInputTokens: contentAnalysis.usage?.inputTokens,
       openaiOutputTokens: contentAnalysis.usage?.outputTokens,
       openaiCostUsd: contentAnalysis.usage?.costUsd,
+      clarityStatus: {
+        topicFocus: clarity.dimensions.topicFocus.status,
+        entityClarity: clarity.dimensions.entityClarity.status,
+        semanticCoherence: clarity.dimensions.semanticCoherence.status,
+        answerStructure: clarity.dimensions.answerStructure.status,
+      },
     });
 
     const result: GenerateResult = {

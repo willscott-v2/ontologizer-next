@@ -203,6 +203,10 @@ export function useAnalysis() {
       }
 
       const processingTimeMs = Date.now() - startTime
+      const apiCostUsd =
+        (extractResult.usage?.costUsd ?? extractResult.costUsd ?? 0) +
+        (generated.usage?.costUsd ?? 0) +
+        (fanoutResult?.usage?.costUsd ?? 0)
       const combined: AnalysisResult = {
         entities: enrichedEntities,
         schemaArtifact: generated.schemaArtifact,
@@ -210,6 +214,7 @@ export function useAnalysis() {
         clarity: generated.clarity,
         fanoutAnalysis: fanoutResult,
         processingTimeMs,
+        apiCostUsd,
         source: {
           mode: params.mode,
           url: params.mode === 'url' ? params.url : undefined,
