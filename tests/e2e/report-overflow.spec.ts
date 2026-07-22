@@ -1,7 +1,9 @@
 // Guard: unbreakable tokens (long URLs, hashes) in report content must never
 // widen the report past its container. Regression source: plain-CSS grid
 // tracks (1fr / auto) propagate min-content width, and html{overflow-x:hidden}
-// clips the result instead of scrolling, so cards silently run off the page.
+// plus .si-results{overflow:hidden} clip the result instead of scrolling, so
+// cards silently run off the page. Details content only contributes width
+// once expanded, so every disclosure is opened before measuring.
 import { expect, test, type Page } from '@playwright/test'
 
 const LONG_URL = 'X'.repeat(220)
@@ -24,8 +26,36 @@ const dimension = (name: string) => ({
   checks: [
     { id: `${name}-check-1`, label: `${name} in page title`, status: 'fail', detail: `The page title does not clearly name the main topic. See ${LONG_URL}`, evidenceIds: [`${name}-evidence`] },
     { id: `${name}-check-2`, label: `${name} in H1`, status: 'pass', detail: 'An H1 clearly names the topic.', evidenceIds: [] },
+    { id: `${name}-check-3`, label: `${name} in opening content`, status: 'fail', detail: 'The opening does not establish the topic in the first readable section.', evidenceIds: [] },
+    { id: `${name}-check-4`, label: `${name} supported by section headings`, status: 'pass', detail: 'A supporting heading reinforces the topic.', evidenceIds: [] },
+    { id: `${name}-check-5`, label: `${name} natural repetition`, status: 'pass', detail: 'No excessive exact-phrase repetition was detected.', evidenceIds: [] },
   ],
 })
+
+const ENTITIES = Array.from({ length: 20 }, (_, i) => ({
+  name: i === 0 ? 'Technical SEO' : `Supporting Entity ${i + 1}`,
+  type: i % 3 === 0 ? 'Organization' : 'Concept',
+  confidenceScore: 95 - i * 3,
+  wikipediaUrl: i < 12 ? `https://en.wikipedia.org/wiki/Search_engine_optimization_entity_${i}` : null,
+  wikidataUrl: i === 0 ? LONG_URL : i < 12 ? `https://www.wikidata.org/wiki/Q${180711 + i}` : null,
+  googleKgUrl: i < 8 ? `https://www.google.com/search?kgmid=/g/11khcfz0y${i}` : null,
+  productOntologyUrl: null,
+}))
+
+const RECOMMENDATIONS = [
+  {
+    observation: `The page title and H1 name the audit, but the opening copy starts with a generic paragraph instead of immediately establishing the topic for readers and AI systems. Reference: ${LONG_URL}`,
+    action: 'Rewrite the introduction to state upfront what the page covers, who it is for, and what the reader can expect to learn on this page.',
+    evidence: ['topic-title', 'topic-h1-1', 'topic-opening', 'structure-opening'],
+    priority: 'high', effort: 'small', confidence: 'high', dimension: 'topicFocus',
+  },
+  ...Array.from({ length: 5 }, (_, i) => ({
+    observation: `Additional observation ${i + 2} about entity coverage and how supporting sections could more clearly connect the named entities for both readers and machines.`,
+    action: `Recommended action ${i + 2}: tighten the supporting section so each named entity is introduced in readable text before it appears in structured data.`,
+    evidence: ['entity-coverage'],
+    priority: 'medium', effort: 'medium', confidence: 'medium', dimension: 'entityClarity',
+  })),
+]
 
 async function mockAnalysis(page: Page) {
   await page.route('**/api/analyze/extract', (route) => route.fulfill({
@@ -33,7 +63,7 @@ async function mockAnalysis(page: Page) {
       textParts,
       mainTopic: 'Technical SEO Audits',
       mainTopicConfidence: 0.9,
-      entities: [{ name: 'Technical SEO', type: 'Concept' }],
+      entities: ENTITIES.map((e) => ({ name: e.name, type: e.type })),
       cacheStatus: { fetch: 'fresh', extraction: 'fresh' },
       contentHash: 'a'.repeat(32),
       analysisRunId: '5d8af73e-78b8-4a54-84b9-518ae466488a',
@@ -43,28 +73,30 @@ async function mockAnalysis(page: Page) {
   }))
   await page.route('**/api/analyze/enrich', (route) => route.fulfill({
     json: {
-      enrichedEntities: [{
-        name: 'Technical SEO', type: 'Concept', confidenceScore: 92,
-        wikipediaUrl: 'https://en.wikipedia.org/wiki/Search_engine_optimization',
-        wikidataUrl: LONG_URL, googleKgUrl: null, productOntologyUrl: null,
-      }],
-      cacheStatus: { hits: 0, misses: 1 },
-      googleKnowledgeGraph: 'not_configured',
+      enrichedEntities: ENTITIES,
+      cacheStatus: { hits: 0, misses: 20 },
+      googleKnowledgeGraph: 'ok',
     },
   }))
   await page.route('**/api/analyze/generate', (route) => route.fulfill({
     json: {
       schemaArtifact: {
-        jsonLd: { '@context': 'https://schema.org', '@graph': [{ '@type': 'WebPage', '@id': 'https://example.com/audit#webpage', name: textParts.title }] },
+        jsonLd: {
+          '@context': 'https://schema.org',
+          '@graph': [{
+            '@type': 'WebPage', '@id': 'https://example.com/audit#webpage', name: textParts.title,
+            about: ENTITIES.slice(0, 4).map((e) => ({ '@type': e.type, name: e.name, sameAs: [e.wikipediaUrl, e.wikidataUrl, e.googleKgUrl].filter(Boolean) })),
+          }],
+        },
         pageType: { type: 'Service', confidence: 0.88, evidence: ['Named service language'] },
-        status: 'ready', errors: [], warnings: [], factsUsed: ['Page title', 'Canonical URL ' + 'X'.repeat(280)], factsOmitted: [],
+        status: 'review', errors: [],
+        warnings: [{ code: 'existing-schema', message: 'This page already publishes JSON-LD (FAQPage, WebPage, Organization).', action: 'Merge rather than duplicate.' }],
+        factsUsed: ['Page title', 'Canonical URL ' + 'X'.repeat(280)],
+        factsOmitted: ['5 extracted entities omitted from markup — no external identifiers (Example Phrase One, Example Phrase Two)'],
+        existingSchema: { found: true, types: ['FAQPage', 'WebPage', 'Organization'] },
         schemaVersion: 'connected-schema-1', generatedAt: '2026-07-15T12:00:00.000Z',
       },
-      recommendations: [{
-        observation: 'The opening does not explain who the audit is for.', evidence: ['topic-opening'],
-        action: 'Add one sentence naming the audience.',
-        priority: 'high', effort: 'small', confidence: 'high', dimension: 'topicFocus',
-      }],
+      recommendations: RECOMMENDATIONS,
       clarity: {
         mainTopic: 'Technical SEO Audits', topicConfidence: 0.9, overallStatus: 'mixed',
         dimensions: {
@@ -79,9 +111,7 @@ async function mockAnalysis(page: Page) {
   await page.route('**/api/analyze/log', (route) => route.fulfill({ json: { ok: true } }))
 }
 
-test.use({ viewport: { width: 1326, height: 900 } })
-
-test('diagnostics section does not overflow the page horizontally', async ({ page }) => {
+async function runAnalysisAndExpandAll(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem('ontologizer-api-keys', JSON.stringify({ openaiKey: 'test-key', googleKgKey: '', geminiKey: 'test-key' }))
   })
@@ -90,35 +120,64 @@ test('diagnostics section does not overflow the page horizontally', async ({ pag
   await page.getByLabel('Page URL').fill('https://example.com/audit')
   await page.getByRole('button', { name: 'Analyze page', exact: true }).click()
   await expect(page.getByText('Evidence and diagnostics')).toBeVisible()
-  await page.getByText('Clarity checks and page evidence').click()
+  // Open every disclosure, including ones only rendered once a parent opens.
+  for (let pass = 0; pass < 3; pass++) {
+    await page.evaluate(() => {
+      document.querySelectorAll('details:not([open])').forEach((d) => { (d as HTMLDetailsElement).open = true })
+    })
+  }
   await expect(page.getByText('Why this status').first()).toBeVisible()
-  await page.getByText('Why this status').first().click()
+}
 
-  const widths = await page.evaluate(() => {
+async function measure(page: Page) {
+  return page.evaluate(() => {
     const w = (sel: string) => {
       const el = document.querySelector(sel)
       return el ? Math.round(el.getBoundingClientRect().width) : null
     }
+    const results = document.querySelector('.si-results') as HTMLElement
+    const resultsRight = results.getBoundingClientRect().right
+    const offenders: string[] = []
+    results.querySelectorAll<HTMLElement>('*').forEach((el) => {
+      const r = el.getBoundingClientRect()
+      if (r.right > resultsRight + 1 && r.width > 0) {
+        offenders.push(`${el.tagName.toLowerCase()}.${String(el.className).slice(0, 60)} right=${Math.round(r.right)}`)
+      }
+    })
     const li = [...document.querySelectorAll('.schema-facts-grid li')].find((n) => n.textContent?.includes('XXXX'))
-    const liStyle = li ? getComputedStyle(li) : null
     return {
-      liWrap: liStyle ? `${liStyle.overflowWrap}/${liStyle.wordBreak}/${liStyle.whiteSpace}` : null,
-      liWidth: li ? Math.round(li.getBoundingClientRect().width) : null,
-      liScrollWidth: li ? (li as HTMLElement).scrollWidth : null,
-      bodyWrap: getComputedStyle(document.body).overflowWrap,
-      flowCols: getComputedStyle(document.querySelector('.report-flow')!).gridTemplateColumns,
       innerWidth: window.innerWidth,
       docScrollWidth: document.documentElement.scrollWidth,
-      bodyScrollWidth: document.body.scrollWidth,
+      resultsClientWidth: results.clientWidth,
+      resultsScrollWidth: results.scrollWidth,
+      liWidth: li ? Math.round(li.getBoundingClientRect().width) : null,
+      liScrollWidth: li ? (li as HTMLElement).scrollWidth : null,
       diagnostics: w('.report-diagnostics'),
-      disclosureContent: w('.report-disclosure-content'),
       contentArea: w('.content-area'),
-      reportFlow: w('.report-flow'),
+      offenders: offenders.slice(0, 8),
     }
   })
-  console.log('WIDTHS', JSON.stringify(widths))
-  await page.screenshot({ path: 'test-results/report-overflow.png', fullPage: false })
-  // html overflow-x:hidden masks docScrollWidth; measure the report itself.
+}
+
+function assertNoClip(widths: Awaited<ReturnType<typeof measure>>) {
+  const context = `offenders: ${widths.offenders.join(' | ') || 'none'}`
+  // .si-results has overflow:hidden — any inner overflow is silent clipping.
+  expect(widths.resultsScrollWidth, context).toBeLessThanOrEqual(widths.resultsClientWidth + 1)
+  // html overflow-x:hidden masks page-level overflow the same way.
+  expect(widths.docScrollWidth, context).toBeLessThanOrEqual(widths.innerWidth + 1)
   expect(widths.diagnostics).toBeLessThanOrEqual(widths.contentArea!)
   expect(widths.liScrollWidth).toBeLessThanOrEqual((widths.liWidth ?? 0) + 1)
+}
+
+test.use({ viewport: { width: 1326, height: 900 } })
+
+test('expanded report does not clip horizontally at 1326px', async ({ page }) => {
+  await runAnalysisAndExpandAll(page)
+  assertNoClip(await measure(page))
+})
+
+test('expanded report does not clip horizontally at a wide viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1000 })
+  await runAnalysisAndExpandAll(page)
+  assertNoClip(await measure(page))
 })

@@ -378,7 +378,9 @@ async function callGeminiApi(
     'https://generativelanguage.googleapis.com/v1beta/models';
   // Gemini 2.5 models all shut down 2026-10-16. Chain is cost-ascending:
   // 3.1-flash-lite is GA and positioned as frontier-class at low cost.
-  const models = ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-3.1-pro-preview'];
+  // 3.6-flash (GA 2026-07-21) replaces 3.5-flash: same input price, cheaper
+  // output ($7.50 vs $9.00 per 1M).
+  const models = ['gemini-3.1-flash-lite', 'gemini-3.6-flash', 'gemini-3.1-pro-preview'];
 
   // Status codes that warrant trying the next model in the fallback chain.
   // 503 = model overloaded, 429 = rate limit, 500/502/504 = transient infra,

@@ -31,12 +31,12 @@ No test framework yet. Manual testing via the dev server.
 
 The analysis pipeline is split into 4 API routes to work within Vercel's serverless timeout limits. The `useAnalysis` hook in `hooks/useAnalysis.ts` orchestrates these as a state machine, calling them sequentially:
 
-1. `POST /api/analyze/extract` - Fetch URL, parse HTML (cheerio), extract entities (OpenAI GPT-4o with regex fallback). Checks free-tier metering for non-BYOK users.
-2. `POST /api/analyze/enrich` - Enrich a batch of 5 entities in parallel (Wikipedia, Wikidata, Google KG, ProductOntology). Checks entity cache first, writes back after enrichment.
-3. `POST /api/analyze/generate` - Generate JSON-LD schema, SEO recommendations (OpenAI), salience score
-4. `POST /api/analyze/fanout` - Gemini 2.0 fan-out query analysis (optional)
+1. `POST /api/analyze/extract` - Fetch URL, parse HTML (cheerio), extract entities (OpenAI gpt-5.4-nano with regex fallback). Checks free-tier metering for non-BYOK users.
+2. `POST /api/analyze/enrich` - Enrich all extracted entities in parallel (Wikipedia, Wikidata, Google KG, ProductOntology). Checks entity cache first, writes back after enrichment.
+3. `POST /api/analyze/generate` - Generate JSON-LD schema, SEO recommendations (OpenAI gpt-5.4-mini), salience score
+4. `POST /api/analyze/fanout` - Gemini fan-out query analysis (optional; cost-ascending model fallback chain in `lib/pipeline/fanout-analyzer.ts`)
 
-The client calls `/extract` once, then `/enrich` 2-4 times (batches of 5), then `/generate`, then optionally `/fanout`. Each call targets <10s wall-clock.
+The client calls `/extract`, `/enrich`, and `/generate` once each, then optionally `/fanout`. Each call targets <10s wall-clock. Model IDs live in the pipeline modules with pricing in `lib/pricing.ts` — keep the two in sync.
 
 ### BYOK (Bring Your Own Keys)
 
@@ -62,8 +62,8 @@ Users provide API keys via the Settings page (`/settings`). Keys are stored in `
 
 | API | Header | Purpose |
 |-----|--------|---------|
-| OpenAI (gpt-4o) | `X-OpenAI-Key` | Entity extraction, SEO recommendations |
-| Google Gemini 2.0 | `X-Gemini-Key` | Fan-out query analysis |
+| OpenAI (gpt-5.4-nano / gpt-5.4-mini) | `X-OpenAI-Key` | Entity extraction / SEO recommendations |
+| Google Gemini 3.x | `X-Gemini-Key` | Fan-out query analysis |
 | Google Knowledge Graph | `X-Google-KG-Key` | Entity enrichment |
 | Wikipedia | (none) | Entity validation and URLs |
 | Wikidata | (none) | Semantic identifiers |

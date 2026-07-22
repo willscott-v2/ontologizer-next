@@ -14,6 +14,7 @@ import { generateServiceSchema } from './service';
 import { generateLocalBusinessSchema } from './local-business';
 import { generateEducationalSchema } from './educational';
 import { buildSchemaArtifact } from './artifact';
+import { hasExternalIdentifier } from './helpers';
 
 export type SchemaType =
   | 'Service'
@@ -223,5 +224,8 @@ export function generateSchemaArtifact(
         return generateWebPageSchema(entities, textParts, url);
     }
   })();
-  return buildSchemaArtifact(raw, detection, textParts, url);
+  const omittedEntityNames = entities
+    .filter((entity) => !hasExternalIdentifier(entity))
+    .map((entity) => entity.name);
+  return buildSchemaArtifact(raw, detection, textParts, url, omittedEntityNames);
 }

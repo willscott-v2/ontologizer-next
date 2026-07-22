@@ -24,6 +24,7 @@ const PRICING: Record<string, ModelPricing> = {
 
   // Gemini — current
   'gemini-3.1-flash-lite': { inputPer1M: 0.25, outputPer1M: 1.5 },
+  'gemini-3.6-flash': { inputPer1M: 1.5, outputPer1M: 7.5 },
   'gemini-3.5-flash': { inputPer1M: 1.5, outputPer1M: 9 },
   'gemini-3.1-pro-preview': { inputPer1M: 2, outputPer1M: 12 },
   // Gemini — legacy (all shut down 2026-10-16)

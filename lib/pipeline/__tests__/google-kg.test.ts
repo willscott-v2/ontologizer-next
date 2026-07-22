@@ -28,11 +28,23 @@ describe('verified Google Knowledge Graph links', () => {
       name: 'OpenAI',
       type: 'Organization',
       confidenceScore: 90,
-      wikipediaUrl: null,
+      wikipediaUrl: 'https://en.wikipedia.org/wiki/OpenAI',
       wikidataUrl: null,
       googleKgUrl: 'https://www.google.com/search?q=OpenAI',
       productOntologyUrl: null,
     }]);
-    expect(entity.sameAs).toBeUndefined();
+    expect(entity.sameAs).toEqual(['https://en.wikipedia.org/wiki/OpenAI']);
+  });
+
+  it('excludes an entity whose only source is a generic Google search URL', () => {
+    expect(buildAboutEntities([{
+      name: 'OpenAI',
+      type: 'Organization',
+      confidenceScore: 90,
+      wikipediaUrl: null,
+      wikidataUrl: null,
+      googleKgUrl: 'https://www.google.com/search?q=OpenAI',
+      productOntologyUrl: null,
+    }])).toEqual([]);
   });
 });

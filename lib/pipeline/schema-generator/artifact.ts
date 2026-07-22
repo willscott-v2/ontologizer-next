@@ -207,11 +207,19 @@ export function detectExistingJsonLd(html: string): { found: boolean; types: str
   return { found, types: [...types].slice(0, 12) };
 }
 
+/** One readable facts-omitted line for entities excluded from the markup. */
+function omittedEntitiesFact(names: string[]): string {
+  const shown = names.slice(0, 5).join(', ');
+  const more = names.length > 5 ? `, +${names.length - 5} more` : '';
+  return `${names.length} extracted ${names.length === 1 ? 'entity' : 'entities'} omitted from markup — no external identifiers (${shown}${more})`;
+}
+
 export function buildSchemaArtifact(
   raw: Record<string, unknown>,
   detection: SchemaDetection,
   textParts: TextParts,
   url: string,
+  omittedEntityNames: string[] = [],
 ): SchemaArtifact {
   const jsonLd = connectGraph(raw, detection.type, url);
   const { errors, warnings } = validateArtifact(jsonLd, detection, url);
@@ -233,6 +241,7 @@ export function buildSchemaArtifact(
     !url ? 'Canonical URL' : null,
     !textParts.description ? 'Meta description' : null,
     !textParts.headings.some((heading) => heading.level === 1) ? 'Visible H1' : null,
+    omittedEntityNames.length > 0 ? omittedEntitiesFact(omittedEntityNames) : null,
   ].filter((fact): fact is string => Boolean(fact));
   const status: SchemaArtifact['status'] = errors.length > 0
     ? 'insufficient'

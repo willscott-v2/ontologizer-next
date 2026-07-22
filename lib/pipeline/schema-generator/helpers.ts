@@ -143,14 +143,32 @@ export function buildWebSiteNode(
 
 
 /**
+ * An entity may only appear in generated markup when it resolved to at least
+ * one external identifier (Wikipedia, Wikidata, a verified KGMID, LinkedIn,
+ * or ProductOntology). Unresolved names are usually extraction noise or
+ * search phrases; emitting them as bare Thing nodes reads as keyword
+ * stuffing to schema consumers.
+ */
+export function hasExternalIdentifier(entity: EnrichedEntity): boolean {
+  return Boolean(
+    entity.wikipediaUrl ||
+      entity.wikidataUrl ||
+      entity.googleKgUrl?.includes('kgmid=') ||
+      entity.linkedinUrl ||
+      entity.productOntologyUrl,
+  );
+}
+
+/**
  * Build an array of schema.org Thing objects from enriched entities.
  * Each Thing includes name, optional additionalType, and sameAs links.
+ * Entities without any external identifier are excluded.
  * Ported from PHP build_about_entities().
  */
 export function buildAboutEntities(
   entities: EnrichedEntity[],
 ): Record<string, unknown>[] {
-  return entities.map((entity) => {
+  return entities.filter(hasExternalIdentifier).map((entity) => {
     const sameAs: string[] = [];
     if (entity.wikipediaUrl) sameAs.push(entity.wikipediaUrl);
     if (entity.wikidataUrl) sameAs.push(entity.wikidataUrl);
