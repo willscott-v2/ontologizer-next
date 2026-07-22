@@ -26,6 +26,17 @@ export function Footer() {
           </a>
           .
         </p>
+        <p className="mt-3">
+          Preparing page content for RAG or LLM context?{' '}
+          <a
+            href="https://getchunks.searchinfluence.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Try the Web Content Chunker
+          </a>
+          .
+        </p>
         <p className="mt-4">
           <a
             href="https://github.com/willscott-v2/ontologizer"
